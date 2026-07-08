@@ -1,0 +1,10 @@
+{
+  "window_x": -1,
+  "window_y": -1,
+  "scale": 1.0,
+  "auto_walk_enabled": true,
+  "walk_interval_min_sec": 30,
+  "walk_interval_max_sec": 90,
+  "idle_to_sleep_seconds": 300,
+  "remind_animation_duration_sec": 5
+}

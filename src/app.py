@@ -57,6 +57,12 @@ class PetApp(QObject):
         self._tray.toggle_settings.connect(self._on_settings)
         self._tray.walk_now.connect(self._on_walk_now)
 
+        # 窗口右键菜单信号
+        self._window.settings_requested.connect(self._on_settings)
+        self._window.add_reminder_requested.connect(self._on_add_reminder)
+        self._window.manage_reminders_requested.connect(self._on_manage_reminders)
+        self._window.quit_requested.connect(self._on_quit)
+
         # 提醒触发信号
         self._reminder_mgr.reminderTriggered.connect(self._on_reminder_triggered)
 

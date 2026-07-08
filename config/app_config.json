@@ -1,9 +1,9 @@
 {
-  "window_x": 1914,
-  "window_y": 1320,
+  "window_x": 1820,
+  "window_y": 846,
   "scale": 1.0,
   "auto_walk_enabled": false,
-  "walk_interval_min_sec": 30,
+  "walk_interval_min_sec": 36,
   "walk_interval_max_sec": 90,
   "idle_to_sleep_seconds": 60,
   "remind_animation_duration_sec": 5

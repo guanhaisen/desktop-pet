@@ -1,24 +1,34 @@
 {
   "reminders": [
     {
-      "id": "r-001",
       "title": "该领月薪啦",
       "message": "今天是发工资日，记得查收月薪喵！",
       "hour": 10,
       "minute": 0,
       "repeat": "daily",
-      "enabled": true,
-      "animation_state": "remind"
+      "enabled": false,
+      "animation_state": "remind",
+      "id": "r-001"
     },
     {
-      "id": "r-002",
       "title": "站起来活动一下",
       "message": "坐太久啦，起来走走喵~",
       "hour": 14,
       "minute": 30,
       "repeat": "daily",
       "enabled": false,
-      "animation_state": "remind"
+      "animation_state": "remind",
+      "id": "r-002"
+    },
+    {
+      "title": "你好",
+      "message": "哈哈哈哈",
+      "hour": 15,
+      "minute": 31,
+      "repeat": "daily",
+      "enabled": true,
+      "animation_state": "remind",
+      "id": "r-f9a25fab"
     }
   ]
 }

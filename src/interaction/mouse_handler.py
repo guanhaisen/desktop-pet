@@ -12,12 +12,14 @@ class MouseHandler(QObject):
     """处理桌宠窗口的鼠标事件，判定点击与拖拽。
 
     信号:
-        clicked: 单击（未拖拽）时发出
+        clicked: 左键单击（未拖拽）时发出
+        right_clicked: 右键单击时发出，携带全局坐标用于定位菜单
         drag_started: 拖拽开始时发出
         drag_finished: 拖拽结束时发出
     """
 
     clicked = pyqtSignal()
+    right_clicked = pyqtSignal(QPoint)
     drag_started = pyqtSignal()
     drag_finished = pyqtSignal()
 
@@ -38,6 +40,10 @@ class MouseHandler(QObject):
             self._window_start_pos = self._window.pos()
             self._is_pressed = True
             self._is_dragging = False
+            event.accept()
+        elif event.button() == Qt.RightButton:
+            logger.debug('右键单击')
+            self.right_clicked.emit(event.globalPos())
             event.accept()
 
     def on_mouse_move(self, event: QMouseEvent) -> None:

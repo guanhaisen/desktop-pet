@@ -2,8 +2,8 @@
 
 import random
 
-from PyQt5.QtWidgets import QWidget, QLabel, QApplication
-from PyQt5.QtCore import Qt, QTimer, QPoint
+from PyQt5.QtWidgets import QWidget, QLabel, QApplication, QMenu, QAction
+from PyQt5.QtCore import Qt, QTimer, QPoint, pyqtSignal
 from PyQt5.QtGui import QMouseEvent
 
 from src.state.states import PetState
@@ -23,8 +23,21 @@ class PetWindow(QWidget):
       - 委托 MouseHandler 处理鼠标事件
       - 状态机驱动动画切换
       - 自动行走与睡眠定时器
+      - 右键上下文菜单（切换行走/睡眠、恢复待机、提醒、设置、退出）
       - 拦截 closeEvent 隐藏到托盘
+
+    信号:
+        settings_requested: 右键菜单中点击"设置"时发出
+        add_reminder_requested: 右键菜单中点击"添加提醒"时发出
+        manage_reminders_requested: 右键菜单中点击"管理提醒"时发出
+        quit_requested: 右键菜单中点击"退出"时发出
+        以上信号均由 PetApp 接收并处理
     """
+
+    settings_requested = pyqtSignal()
+    add_reminder_requested = pyqtSignal()
+    manage_reminders_requested = pyqtSignal()
+    quit_requested = pyqtSignal()
 
     # 默认窗口尺寸
     DEFAULT_WIDTH = 200
@@ -77,6 +90,7 @@ class PetWindow(QWidget):
 
         # 鼠标交互
         self._mouse_handler.clicked.connect(self._on_clicked)
+        self._mouse_handler.right_clicked.connect(self._show_context_menu)
         self._mouse_handler.drag_started.connect(self._on_drag_started)
         self._mouse_handler.drag_finished.connect(self._on_drag_finished)
 
@@ -263,6 +277,66 @@ class PetWindow(QWidget):
         self._remind_return_timer.start(duration_sec * 1000)
 
     def _return_to_idle(self) -> None:
+        self._state_machine.transition_to(PetState.IDLE, force=True)
+
+    # ── 右键上下文菜单 ──
+
+    def _show_context_menu(self, pos: QPoint) -> None:
+        """在鼠标位置显示右键上下文菜单。"""
+        menu = QMenu(self)
+
+        walk_action = QAction('切换行走', menu)
+        walk_action.triggered.connect(self._toggle_walk)
+        menu.addAction(walk_action)
+
+        sleep_action = QAction('切换睡眠', menu)
+        sleep_action.triggered.connect(self._toggle_sleep)
+        menu.addAction(sleep_action)
+
+        idle_action = QAction('恢复待机', menu)
+        idle_action.triggered.connect(self._force_idle)
+        menu.addAction(idle_action)
+
+        menu.addSeparator()
+
+        add_reminder_action = QAction('添加提醒...', menu)
+        add_reminder_action.triggered.connect(self.add_reminder_requested.emit)
+        menu.addAction(add_reminder_action)
+
+        manage_reminders_action = QAction('管理提醒', menu)
+        manage_reminders_action.triggered.connect(self.manage_reminders_requested.emit)
+        menu.addAction(manage_reminders_action)
+
+        menu.addSeparator()
+
+        settings_action = QAction('设置...', menu)
+        settings_action.triggered.connect(self.settings_requested.emit)
+        menu.addAction(settings_action)
+
+        menu.addSeparator()
+
+        quit_action = QAction('退出', menu)
+        quit_action.triggered.connect(self.quit_requested.emit)
+        menu.addAction(quit_action)
+
+        menu.exec_(pos)
+
+    def _toggle_walk(self) -> None:
+        """切换行走状态：行走中则停止，否则开始行走。"""
+        if self._state_machine.current_state == PetState.WALK:
+            self._state_machine.transition_to(PetState.IDLE, force=True)
+        else:
+            self._start_walk()
+
+    def _toggle_sleep(self) -> None:
+        """切换睡眠状态：睡眠中则唤醒，否则进入睡眠。"""
+        if self._state_machine.current_state == PetState.SLEEP:
+            self._state_machine.transition_to(PetState.IDLE, force=True)
+        else:
+            self._state_machine.transition_to(PetState.SLEEP, force=True)
+
+    def _force_idle(self) -> None:
+        """强制恢复待机状态，忽略当前状态优先级。"""
         self._state_machine.transition_to(PetState.IDLE, force=True)
 
     # ── 鼠标事件委托 ──

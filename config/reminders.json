@@ -26,9 +26,19 @@
       "hour": 15,
       "minute": 31,
       "repeat": "daily",
-      "enabled": true,
+      "enabled": false,
       "animation_state": "remind",
       "id": "r-f9a25fab"
+    },
+    {
+      "title": "测试持续提醒",
+      "message": "点击我停止提醒喵~",
+      "hour": 17,
+      "minute": 38,
+      "repeat": "daily",
+      "enabled": true,
+      "animation_state": "remind",
+      "id": "r-a55b6cfe"
     }
   ]
 }

@@ -38,6 +38,7 @@ class PetWindow(QWidget):
     add_reminder_requested = pyqtSignal()
     manage_reminders_requested = pyqtSignal()
     quit_requested = pyqtSignal()
+    remind_notification = pyqtSignal(str, str)  # (title, message) 请求重复弹出托盘通知
 
     # 默认窗口尺寸
     DEFAULT_WIDTH = 200
@@ -76,10 +77,15 @@ class PetWindow(QWidget):
         self._sleep_timer = QTimer(self)      # 空闲进入睡眠
         self._walk_move_timer = QTimer(self)  # 行走时持续移动
         self._walk_stop_timer = QTimer(self)  # 行走停止（单次）
-        self._remind_return_timer = QTimer(self)  # 提醒动画后回 idle
+        self._remind_repeat_timer = QTimer(self)  # 提醒期间重复通知
 
         self._walk_direction = 1  # 1=右, -1=左
         self._walk_speed = 2     # 每次移动像素
+
+        # 提醒状态
+        self._remind_active: bool = False
+        self._remind_title: str = ''
+        self._remind_message: str = ''
 
         self._setup_connections()
         self._setup_window()
@@ -106,9 +112,8 @@ class PetWindow(QWidget):
         # 睡眠定时器
         self._sleep_timer.timeout.connect(self._on_sleep_triggered)
 
-        # 提醒结束定时器（单次）
-        self._remind_return_timer.setSingleShot(True)
-        self._remind_return_timer.timeout.connect(self._return_to_idle)
+        # 提醒重复通知定时器（周期性，直到用户点击停止）
+        self._remind_repeat_timer.timeout.connect(self._on_remind_repeat)
 
     def _setup_window(self) -> None:
         """设置窗口初始位置和尺寸。
@@ -181,6 +186,11 @@ class PetWindow(QWidget):
             self._walk_stop_timer.stop()    # 离开行走状态时取消停止定时器
 
     def _on_clicked(self) -> None:
+        # 提醒激活时，左键点击停止提醒
+        if self._remind_active:
+            self._stop_remind()
+            logger.info('用户点击停止提醒')
+            return
         self._state_machine.transition_to(PetState.INTERACT)
 
     def _on_drag_started(self) -> None:
@@ -189,7 +199,11 @@ class PetWindow(QWidget):
     def _on_drag_finished(self) -> None:
         # 保存窗口位置
         self._config.update_window_position(self.x(), self.y())
-        self._state_machine.transition_to(PetState.IDLE, force=True)
+        # 提醒激活时拖拽结束回到提醒状态，而非待机
+        if self._remind_active:
+            self._state_machine.transition_to(PetState.REMIND, force=True)
+        else:
+            self._state_machine.transition_to(PetState.IDLE, force=True)
 
     def _on_interact_finished(self, state_name: str) -> None:
         if state_name == 'interact':
@@ -197,6 +211,8 @@ class PetWindow(QWidget):
 
     def _on_walk_triggered(self) -> None:
         """随机行走定时器触发。"""
+        if self._remind_active:
+            return
         if self._config.app_config.auto_walk_enabled:
             self._start_walk()
 
@@ -268,15 +284,39 @@ class PetWindow(QWidget):
 
     # ── 提醒触发 ──
 
-    def trigger_remind(self, duration_sec: int = None) -> None:
-        """触发提醒状态动画。"""
-        if duration_sec is None:
-            duration_sec = self._config.app_config.remind_animation_duration_sec
+    # 提醒期间重复弹出托盘通知的间隔（秒）
+    REMIND_NOTIFY_INTERVAL_SEC = 10
 
+    def trigger_remind(self, title: str = '', message: str = '') -> None:
+        """触发提醒状态：持续播放提醒动画并周期性通知，直到用户左键点击。
+
+        参数:
+            title: 提醒标题（用于托盘通知）
+            message: 提醒内容（用于托盘通知）
+        """
+        self._remind_title = title or '提醒'
+        self._remind_message = message or '该注意啦！'
+        self._remind_active = True
+
+        # 切换到提醒动画（强制，REMIND 优先级最高）
         self._state_machine.transition_to(PetState.REMIND, force=True)
-        self._remind_return_timer.start(duration_sec * 1000)
 
-    def _return_to_idle(self) -> None:
+        # 立即弹出一次托盘通知
+        self.remind_notification.emit(self._remind_title, self._remind_message)
+
+        # 启动周期性重复通知定时器
+        self._remind_repeat_timer.start(self.REMIND_NOTIFY_INTERVAL_SEC * 1000)
+        logger.info(f'提醒已触发，将持续提醒直到用户点击: {self._remind_title}')
+
+    def _on_remind_repeat(self) -> None:
+        """提醒期间周期性重复弹出托盘通知。"""
+        if self._remind_active:
+            self.remind_notification.emit(self._remind_title, self._remind_message)
+
+    def _stop_remind(self) -> None:
+        """停止提醒：关闭重复通知定时器并回到待机状态。"""
+        self._remind_repeat_timer.stop()
+        self._remind_active = False
         self._state_machine.transition_to(PetState.IDLE, force=True)
 
     # ── 右键上下文菜单 ──

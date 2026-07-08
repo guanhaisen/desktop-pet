@@ -66,6 +66,9 @@ class PetApp(QObject):
         # 提醒触发信号
         self._reminder_mgr.reminderTriggered.connect(self._on_reminder_triggered)
 
+        # 提醒期间重复托盘通知
+        self._window.remind_notification.connect(self._tray.show_message)
+
     def _load_data(self) -> None:
         # 加载提醒
         self._reminder_mgr.load()
@@ -122,14 +125,16 @@ class PetApp(QObject):
             logger.info(f'缩放比例已更新: {scale}')
 
     def _on_reminder_triggered(self, reminder) -> None:
-        """提醒触发：弹通知 + 切换提醒动画。"""
+        """提醒触发：切换到持续提醒状态（直到用户左键点击桌宠）。"""
         title = reminder.title or '提醒'
         message = reminder.message or '该注意啦！'
-        self._tray.show_message(title, message)
-        self._window.trigger_remind()
         # 如果窗口隐藏则显示
         if not self._window.isVisible():
             self._window.show()
+            self._window.raise_()
+            self._window.activateWindow()
+        # trigger_remind 会立即弹出首次托盘通知并启动周期性重复通知
+        self._window.trigger_remind(title, message)
 
     # ── 运行 ──
 

@@ -63,11 +63,13 @@ class PetApp(QObject):
     def _load_data(self) -> None:
         # 加载提醒
         self._reminder_mgr.load()
-        # 加载动画资源并显示窗口
+        # 加载动画资源并适配窗口尺寸（不播放）
         self._window.load_assets()
+        # 先显示窗口，再播放动画——避免 QMovie 在窗口未显示时启动导致不渲染
         self._window.show()
         self._window.raise_()
         self._window.activateWindow()
+        self._window.start_idle()
         logger.info(f'月薪喵已启动 - 窗口位置: ({self._window.x()}, {self._window.y()}), '
                     f'尺寸: {self._window.width()}x{self._window.height()}, '
                     f'可见: {self._window.isVisible()}')

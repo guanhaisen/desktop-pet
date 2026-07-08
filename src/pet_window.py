@@ -105,19 +105,25 @@ class PetWindow(QWidget):
         self._move_to_bottom_right()
 
     def _move_to_bottom_right(self) -> None:
-        """将窗口移动到主屏幕右下角，留出 20px 边距。"""
+        """将窗口移动到主屏幕右下角，留出边距。
+
+        右边距 120px（更靠左，避开屏幕右缘），下边距 20px。
+        """
         screen = QApplication.desktop().availableGeometry()
-        x = screen.right() - self.width() - 20
+        x = screen.right() - self.width() - 120
         y = screen.bottom() - self.height() - 20
         self.move(x, y)
 
     # ── 资源加载 ──
 
     def load_assets(self) -> None:
-        """加载所有动画资源。应在 show() 前调用。"""
+        """加载所有动画资源并适配窗口尺寸。应在 show() 前调用。
+
+        注意：本方法只加载资源与确定尺寸，不开始播放动画，
+        避免在窗口未显示时启动 QMovie 导致首帧不渲染。
+        播放请调用 start_idle()（在 show() 之后）。
+        """
         self._anim_controller.load_all()
-        # 初始播放 idle
-        self._state_machine.transition_to(PetState.IDLE, force=True)
 
         # 根据 idle GIF 尺寸调整窗口大小
         idle_player = self._anim_controller.get_player('idle')
@@ -134,6 +140,13 @@ class PetWindow(QWidget):
         # 尺寸确定后重新贴合到屏幕右下角
         self._move_to_bottom_right()
 
+    def start_idle(self) -> None:
+        """开始播放 idle 动画并启动空闲定时器。应在 show() 后调用。
+
+        直接调用动画控制器播放 idle，而非经状态机 transition_to——
+        状态机初始状态即为 IDLE，同状态转换会被跳过导致动画不播放。
+        """
+        self._anim_controller.play(PetState.IDLE)
         self._start_idle_timers()
 
     # ── 状态回调 ──

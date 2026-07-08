@@ -97,18 +97,19 @@ class PetWindow(QWidget):
         self._remind_return_timer.timeout.connect(self._return_to_idle)
 
     def _setup_window(self) -> None:
-        """设置窗口初始位置和尺寸。"""
-        cfg = self._config.app_config
-        self.resize(self.DEFAULT_WIDTH, self.DEFAULT_HEIGHT)
+        """设置窗口初始位置和尺寸。
 
-        if cfg.window_x >= 0 and cfg.window_y >= 0:
-            self.move(cfg.window_x, cfg.window_y)
-        else:
-            # 默认屏幕右下角
-            screen = QApplication.desktop().availableGeometry()
-            x = screen.right() - self.DEFAULT_WIDTH - 20
-            y = screen.bottom() - self.DEFAULT_HEIGHT - 20
-            self.move(x, y)
+        启动时固定定位到屏幕右下角，忽略上次保存的位置。
+        """
+        self.resize(self.DEFAULT_WIDTH, self.DEFAULT_HEIGHT)
+        self._move_to_bottom_right()
+
+    def _move_to_bottom_right(self) -> None:
+        """将窗口移动到主屏幕右下角，留出 20px 边距。"""
+        screen = QApplication.desktop().availableGeometry()
+        x = screen.right() - self.width() - 20
+        y = screen.bottom() - self.height() - 20
+        self.move(x, y)
 
     # ── 资源加载 ──
 
@@ -129,6 +130,9 @@ class PetWindow(QWidget):
                 self.resize(w, h)
                 self._label.setGeometry(0, 0, w, h)
                 logger.info(f'窗口尺寸已适配 GIF: {w}x{h}')
+
+        # 尺寸确定后重新贴合到屏幕右下角
+        self._move_to_bottom_right()
 
         self._start_idle_timers()
 
@@ -167,12 +171,25 @@ class PetWindow(QWidget):
     def _on_walk_triggered(self) -> None:
         """随机行走定时器触发。"""
         if self._config.app_config.auto_walk_enabled:
-            self._state_machine.transition_to(PetState.WALK)
-            # 随机选择方向
-            self._walk_direction = random.choice([1, -1])
-            # 设置一次性停止定时器（行走 2-5 秒后停止）
-            walk_duration_ms = random.randint(2000, 5000)
-            self._walk_stop_timer.start(walk_duration_ms)
+            self._start_walk()
+
+    def trigger_walk(self) -> None:
+        """手动指示行走（不受自动行走开关影响）。
+
+        仅在待机/睡眠状态下响应，避免打断互动、提醒等高优先级状态。
+        """
+        if self._state_machine.current_state in (PetState.IDLE, PetState.SLEEP):
+            self._start_walk()
+            logger.info('收到手动行走指示')
+
+    def _start_walk(self) -> None:
+        """开始一次行走：切换状态、随机方向、设定停止时刻。"""
+        self._state_machine.transition_to(PetState.WALK, force=True)
+        # 随机选择方向
+        self._walk_direction = random.choice([1, -1])
+        # 设置一次性停止定时器（行走 2-5 秒后停止）
+        walk_duration_ms = random.randint(2000, 5000)
+        self._walk_stop_timer.start(walk_duration_ms)
 
     def _on_sleep_triggered(self) -> None:
         """空闲超时进入睡眠。"""

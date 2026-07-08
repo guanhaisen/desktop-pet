@@ -17,6 +17,7 @@ class TrayManager(QObject):
         add_reminder: 请求打开添加提醒对话框
         manage_reminders: 请求打开提醒管理
         toggle_settings: 请求打开设置
+        walk_now: 请求手动触发一次行走
     """
 
     show_pet = pyqtSignal()
@@ -24,6 +25,7 @@ class TrayManager(QObject):
     add_reminder = pyqtSignal()
     manage_reminders = pyqtSignal()
     toggle_settings = pyqtSignal()
+    walk_now = pyqtSignal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -56,6 +58,10 @@ class TrayManager(QObject):
         show_action = QAction('显示月薪喵', menu)
         show_action.triggered.connect(self.show_pet.emit)
         menu.addAction(show_action)
+
+        walk_action = QAction('去散步', menu)
+        walk_action.triggered.connect(self.walk_now.emit)
+        menu.addAction(walk_action)
 
         menu.addSeparator()
 

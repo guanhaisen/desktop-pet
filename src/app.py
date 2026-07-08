@@ -55,6 +55,7 @@ class PetApp(QObject):
         self._tray.add_reminder.connect(self._on_add_reminder)
         self._tray.manage_reminders.connect(self._on_manage_reminders)
         self._tray.toggle_settings.connect(self._on_settings)
+        self._tray.walk_now.connect(self._on_walk_now)
 
         # 提醒触发信号
         self._reminder_mgr.reminderTriggered.connect(self._on_reminder_triggered)
@@ -78,6 +79,10 @@ class PetApp(QObject):
         self._window.raise_()
         self._window.activateWindow()
         logger.info('显示桌宠窗口')
+
+    def _on_walk_now(self) -> None:
+        """手动指示桌宠去散步。"""
+        self._window.trigger_walk()
 
     def _on_quit(self) -> None:
         # 退出前保存配置

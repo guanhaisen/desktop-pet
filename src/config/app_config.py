@@ -10,7 +10,7 @@ class AppConfig:
     window_x: int = -1          # -1 表示尚未保存，使用默认位置
     window_y: int = -1
     scale: float = 1.0          # 动画缩放比例
-    auto_walk_enabled: bool = True
+    auto_walk_enabled: bool = False
     walk_interval_min_sec: int = 30
     walk_interval_max_sec: int = 90
     idle_to_sleep_seconds: int = 300       # 5 分钟无操作进入睡眠

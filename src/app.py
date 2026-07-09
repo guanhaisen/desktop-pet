@@ -12,6 +12,7 @@ from src.reminder.reminder_manager import ReminderManager
 from src.reminder.reminder_dialog import ReminderDialog
 from src.config.config_manager import ConfigManager
 from src.ui.bubble import BubbleWindow
+from src.salary.salary_manager import SalaryManager
 from src.utils.path_helper import asset_path
 from src.utils.logger import logger
 
@@ -41,9 +42,11 @@ class PetApp(QObject):
         self._tray = TrayManager()
         self._reminder_mgr = ReminderManager()
         self._bubble = BubbleWindow()
+        self._salary_mgr = SalaryManager()
 
         self._setup_tray()
         self._connect_signals()
+        self._window.set_salary_manager(self._salary_mgr)
         self._load_data()
 
     def _setup_tray(self) -> None:
@@ -74,6 +77,11 @@ class PetApp(QObject):
         # 气泡系统信号
         self._window.bubble_requested.connect(self._on_bubble_requested)
         self._window.position_changed.connect(self._on_position_changed)
+
+        # 薪资系统信号
+        self._salary_mgr.bubble_requested.connect(self._on_bubble_requested)
+        self._salary_mgr.remind_requested.connect(self._on_salary_remind)
+        self._salary_mgr.payday_info_changed.connect(self._on_payday_info_changed)
 
     def _load_data(self) -> None:
         # 加载提醒
@@ -128,6 +136,8 @@ class PetApp(QObject):
             scale = dialog.get_scale()
             self._config.update_scale(scale)
             self._window._anim_controller.scale = scale
+            # 重新加载薪资系统（用户可能修改了薪资配置）
+            self._salary_mgr.reload()
             logger.info(f'缩放比例已更新: {scale}')
 
     def _on_reminder_triggered(self, reminder) -> None:
@@ -154,6 +164,20 @@ class PetApp(QObject):
     def _on_position_changed(self, x: int, y: int, width: int) -> None:
         """桌宠位置变化时同步气泡位置。"""
         self._bubble.follow_pos(x, y, width)
+
+    # ── 薪资处理 ──
+
+    def _on_salary_remind(self, title: str, message: str) -> None:
+        """薪资系统触发提醒（发薪日/下班）。"""
+        if not self._window.isVisible():
+            self._window.show()
+            self._window.raise_()
+            self._window.activateWindow()
+        self._window.trigger_remind(title, message)
+
+    def _on_payday_info_changed(self, info: str) -> None:
+        """发薪倒计时信息变化，更新托盘 tooltip。"""
+        self._tray.set_tooltip(info)
 
     # ── 运行 ──
 

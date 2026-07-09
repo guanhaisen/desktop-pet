@@ -101,6 +101,11 @@ class TrayManager(QObject):
                 duration_ms
             )
 
+    def set_tooltip(self, text: str) -> None:
+        """更新托盘 tooltip。"""
+        if self._tray:
+            self._tray.setToolTip(text)
+
     @property
     def is_available(self) -> bool:
         return self._tray is not None and self._tray.isVisible()

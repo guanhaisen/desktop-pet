@@ -84,6 +84,9 @@ class PetWindow(QWidget):
         # ── 心情管理器 ──
         self._mood_mgr = MoodManager(self)
 
+        # ── 薪资管理器（由 PetApp 注入，默认 None）──
+        self._salary_mgr = None
+
         # ── 定时器 ──
         self._walk_timer = QTimer(self)       # 随机行走触发
         self._sleep_timer = QTimer(self)      # 空闲进入睡眠
@@ -402,6 +405,20 @@ class PetWindow(QWidget):
         mood_action.setEnabled(False)
         menu.addAction(mood_action)
 
+        # 薪资信息显示（发薪倒计时 + 下班倒计时）
+        if self._salary_mgr is not None and self._salary_mgr._is_enabled():
+            payday_info = f'发薪：{self._salary_mgr.get_payday_countdown()} 天后'
+            if self._salary_mgr.get_payday_countdown() == 0:
+                payday_info = '发薪：今天发薪日！'
+            payday_action = QAction(payday_info, menu)
+            payday_action.setEnabled(False)
+            menu.addAction(payday_action)
+
+            offwork_info = self._salary_mgr.get_offwork_countdown()
+            offwork_action = QAction(offwork_info, menu)
+            offwork_action.setEnabled(False)
+            menu.addAction(offwork_action)
+
         menu.addSeparator()
 
         add_reminder_action = QAction('添加提醒...', menu)
@@ -437,6 +454,10 @@ class PetWindow(QWidget):
             'emo': 'emo',
         }.get(category, '普通')
         return f'心情：{value}（{category_text}）'
+
+    def set_salary_manager(self, mgr) -> None:
+        """注入薪资管理器，供右键菜单显示发薪/下班倒计时。"""
+        self._salary_mgr = mgr
 
     def _toggle_walk(self) -> None:
         """切换行走状态：行走中则停止，否则开始行走。"""

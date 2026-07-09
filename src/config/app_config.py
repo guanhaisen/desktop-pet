@@ -18,6 +18,13 @@ class AppConfig:
     # 心情系统
     mood_value: int = 70                 # 当前心情值 (0-100)
     last_mood_increase_ts: float = 0.0   # 上次心情增加的时间戳
+    # 薪资系统
+    salary_enabled: bool = False         # 是否启用薪资功能
+    payday_day: int = 15                 # 发薪日（每月几号）
+    monthly_salary: float = 0.0          # 月薪金额（元）
+    work_start_hour: int = 9             # 上班时间（小时，24小时制）
+    work_end_hour: int = 18              # 下班时间（小时，24小时制）
+    work_days_per_month: int = 22        # 每月工作日数
 
     def to_dict(self) -> dict:
         return asdict(self)

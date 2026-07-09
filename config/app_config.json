@@ -1,12 +1,18 @@
 {
-  "window_x": 2192,
-  "window_y": 1012,
+  "window_x": 2299,
+  "window_y": 525,
   "scale": 1.0,
   "auto_walk_enabled": false,
   "walk_interval_min_sec": 36,
   "walk_interval_max_sec": 90,
   "idle_to_sleep_seconds": 60,
   "remind_animation_duration_sec": 5,
-  "mood_value": 75,
-  "last_mood_increase_ts": 1783592905.546855
+  "mood_value": 95,
+  "last_mood_increase_ts": 1783595209.225352,
+  "salary_enabled": true,
+  "payday_day": 30,
+  "monthly_salary": 1000.0,
+  "work_start_hour": 8,
+  "work_end_hour": 22,
+  "work_days_per_month": 30
 }

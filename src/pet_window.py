@@ -12,6 +12,7 @@ from src.animation.animation_controller import AnimationController
 from src.interaction.mouse_handler import MouseHandler
 from src.config.config_manager import ConfigManager
 from src.content.quotes import get_random_quote
+from src.pet.mood import MoodManager
 from src.utils.logger import logger
 
 
@@ -80,6 +81,9 @@ class PetWindow(QWidget):
         # ── 鼠标交互处理器 ──
         self._mouse_handler = MouseHandler(self, self)
 
+        # ── 心情管理器 ──
+        self._mood_mgr = MoodManager(self)
+
         # ── 定时器 ──
         self._walk_timer = QTimer(self)       # 随机行走触发
         self._sleep_timer = QTimer(self)      # 空闲进入睡眠
@@ -123,6 +127,11 @@ class PetWindow(QWidget):
         # 提醒重复通知定时器（周期性，直到用户点击停止）
         self._remind_repeat_timer.timeout.connect(self._on_remind_repeat)
 
+        # 心情系统：心情类别变化 → 更新动画
+        self._mood_mgr.mood_category_changed.connect(
+            self._anim_controller.set_mood_category
+        )
+
     def _setup_window(self) -> None:
         """设置窗口初始位置和尺寸。
 
@@ -151,6 +160,9 @@ class PetWindow(QWidget):
         播放请调用 start_idle()（在 show() 之后）。
         """
         self._anim_controller.load_all()
+
+        # 设置初始心情类别，使 idle 动画选择正确的变体
+        self._anim_controller.set_mood_category(self._mood_mgr.mood_category)
 
         # 根据 idle GIF 尺寸调整窗口大小
         idle_player = self._anim_controller.get_player('idle')
@@ -192,6 +204,9 @@ class PetWindow(QWidget):
         else:
             self._walk_move_timer.stop()
             self._walk_stop_timer.stop()    # 离开行走状态时取消停止定时器
+
+        # 状态切换时尝试增加心情值（5 分钟冷却）
+        self._mood_mgr.try_increase()
 
         # 状态切换时随机触发气泡
         self._maybe_show_bubble(state)
@@ -235,6 +250,7 @@ class PetWindow(QWidget):
         仅在待机/睡眠状态下响应，避免打断互动、提醒等高优先级状态。
         """
         if self._state_machine.current_state in (PetState.IDLE, PetState.SLEEP):
+            self._mood_mgr.record_interaction()  # 托盘操作也算互动
             self._start_walk()
             logger.info('收到手动行走指示')
 
@@ -380,6 +396,14 @@ class PetWindow(QWidget):
 
         menu.addSeparator()
 
+        # 心情值显示（只读，不可点击）
+        mood_label = self._build_mood_label()
+        mood_action = QAction(mood_label, menu)
+        mood_action.setEnabled(False)
+        menu.addAction(mood_action)
+
+        menu.addSeparator()
+
         add_reminder_action = QAction('添加提醒...', menu)
         add_reminder_action.triggered.connect(self.add_reminder_requested.emit)
         menu.addAction(add_reminder_action)
@@ -401,6 +425,18 @@ class PetWindow(QWidget):
         menu.addAction(quit_action)
 
         menu.exec_(pos)
+
+    def _build_mood_label(self) -> str:
+        """根据当前心情值生成右键菜单显示文本。"""
+        value = self._mood_mgr.mood
+        category = self._mood_mgr.mood_category
+        category_text = {
+            'happy': '开心',
+            'normal': '普通',
+            'tired': '疲惫',
+            'emo': 'emo',
+        }.get(category, '普通')
+        return f'心情：{value}（{category_text}）'
 
     def _toggle_walk(self) -> None:
         """切换行走状态：行走中则停止，否则开始行走。"""
@@ -424,6 +460,7 @@ class PetWindow(QWidget):
 
     def mousePressEvent(self, event: QMouseEvent) -> None:
         self.reset_idle_timer()
+        self._mood_mgr.record_interaction()  # 任何鼠标互动重置心情衰减计时
         self._mouse_handler.on_mouse_press(event)
 
     def mouseMoveEvent(self, event: QMouseEvent) -> None:

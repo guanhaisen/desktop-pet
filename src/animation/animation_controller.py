@@ -32,6 +32,8 @@ class AnimationController(QObject):
         self._player_types: dict[str, str] = {}  # state_name → 'gif'/'frame'
         self._current_state_name: str = None
         self._frame_finished_callback = None
+        # 心情类别（影响 idle 动画变体选择）
+        self._mood_category: str = 'normal'
 
     @property
     def scale(self) -> float:
@@ -52,6 +54,9 @@ class AnimationController(QObject):
 
         for state in PetState:
             self._load_state(state.state_name)
+
+        # 加载心情 idle 变体（idle-happy / idle-tired / idle-emo）
+        self._load_mood_idles()
 
     def _load_state(self, state_name: str) -> None:
         """为指定状态加载动画资源（gif 优先，否则 PNG 序列目录）。"""
@@ -78,6 +83,32 @@ class AnimationController(QObject):
         else:
             logger.info(f'状态 {state_name} 无动画资源，将使用 idle 降级')
 
+    def _load_mood_idles(self) -> None:
+        """加载心情 idle 变体（idle-happy.gif / idle-tired.gif / idle-emo.gif）。"""
+        for category in ('happy', 'tired', 'emo'):
+            variant_name = f'idle-{category}'
+            gif_file = asset_path(self._character, f'{variant_name}.gif')
+            if os.path.isfile(gif_file):
+                player = GifPlayer(gif_file)
+                player.set_label(self._label)
+                player.set_scale(self._scale)
+                self._players[variant_name] = player
+                self._player_types[variant_name] = 'gif'
+                logger.debug(f'心情变体 {variant_name} → GIF: {gif_file}')
+            else:
+                logger.info(f'心情变体 {variant_name}.gif 不存在，将降级到 idle')
+
+    def set_mood_category(self, category: str) -> None:
+        """设置当前心情类别，若正在播放 idle 则切换到对应变体。
+
+        参数:
+            category: happy / normal / tired / emo
+        """
+        self._mood_category = category
+        # 若当前正在播放 idle 系列动画，切换到对应心情变体
+        if self._current_state_name and self._current_state_name.startswith('idle'):
+            self.play(PetState.IDLE)
+
     def play(self, state: PetState) -> None:
         """切换到指定状态的动画。"""
         state_name = state.state_name
@@ -85,12 +116,23 @@ class AnimationController(QObject):
         # 停止当前播放器
         self._stop_current()
 
-        # 查找目标播放器，不存在则降级到 idle
-        player = self._players.get(state_name)
-        if player is None and state_name != 'idle':
-            logger.info(f'状态 {state_name} 无播放器，降级到 idle')
-            player = self._players.get('idle')
-            state_name = 'idle'
+        # IDLE 状态：根据心情类别选择对应变体
+        if state == PetState.IDLE:
+            variant_name = f'idle-{self._mood_category}'
+            player = self._players.get(variant_name)
+            if player is not None:
+                state_name = variant_name
+            else:
+                # 心情变体不存在，降级到普通 idle
+                player = self._players.get('idle')
+                state_name = 'idle'
+        else:
+            # 查找目标播放器，不存在则降级到 idle
+            player = self._players.get(state_name)
+            if player is None and state_name != 'idle':
+                logger.info(f'状态 {state_name} 无播放器，降级到 idle')
+                player = self._players.get('idle')
+                state_name = 'idle'
 
         if player is None:
             logger.warning('无任何可用动画播放器（包括 idle）')

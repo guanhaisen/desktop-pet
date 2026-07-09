@@ -1,10 +1,12 @@
 {
-  "window_x": 1937,
-  "window_y": 738,
+  "window_x": 2192,
+  "window_y": 1012,
   "scale": 1.0,
   "auto_walk_enabled": false,
   "walk_interval_min_sec": 36,
   "walk_interval_max_sec": 90,
   "idle_to_sleep_seconds": 60,
-  "remind_animation_duration_sec": 5
+  "remind_animation_duration_sec": 5,
+  "mood_value": 75,
+  "last_mood_increase_ts": 1783592905.546855
 }

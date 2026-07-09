@@ -1,7 +1,7 @@
 """应用配置数据模型。"""
 
 import json
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, field
 
 
 @dataclass
@@ -15,6 +15,9 @@ class AppConfig:
     walk_interval_max_sec: int = 90
     idle_to_sleep_seconds: int = 300       # 5 分钟无操作进入睡眠
     remind_animation_duration_sec: int = 5  # 提醒动画播放时长
+    # 心情系统
+    mood_value: int = 70                 # 当前心情值 (0-100)
+    last_mood_increase_ts: float = 0.0   # 上次心情增加的时间戳
 
     def to_dict(self) -> dict:
         return asdict(self)

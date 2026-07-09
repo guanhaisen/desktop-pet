@@ -40,11 +40,13 @@ class PetWindow(QWidget):
     add_reminder_requested = pyqtSignal()
     manage_reminders_requested = pyqtSignal()
     quit_requested = pyqtSignal()
+    achievements_requested = pyqtSignal()          # 请求打开成就列表
     remind_notification = pyqtSignal(str, str)  # (title, message) 请求重复弹出托盘通知
 
     # 气泡相关信号
     bubble_requested = pyqtSignal(str)            # 请求显示气泡文字
     position_changed = pyqtSignal(int, int, int)  # (x, y, width) 窗口位置变化，供气泡跟随
+    interacted = pyqtSignal()                      # 用户互动事件（点击等），供成就系统埋点
 
     # 气泡触发概率（状态切换时随机弹出气泡的概率）
     BUBBLE_TRIGGER_PROBABILITY = 0.3
@@ -429,6 +431,10 @@ class PetWindow(QWidget):
         manage_reminders_action.triggered.connect(self.manage_reminders_requested.emit)
         menu.addAction(manage_reminders_action)
 
+        achievements_action = QAction('🏆 打工成就', menu)
+        achievements_action.triggered.connect(self.achievements_requested.emit)
+        menu.addAction(achievements_action)
+
         menu.addSeparator()
 
         settings_action = QAction('设置...', menu)
@@ -482,6 +488,7 @@ class PetWindow(QWidget):
     def mousePressEvent(self, event: QMouseEvent) -> None:
         self.reset_idle_timer()
         self._mood_mgr.record_interaction()  # 任何鼠标互动重置心情衰减计时
+        self.interacted.emit()               # 发出互动信号供成就系统埋点
         self._mouse_handler.on_mouse_press(event)
 
     def mouseMoveEvent(self, event: QMouseEvent) -> None:

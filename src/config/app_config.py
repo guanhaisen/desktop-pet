@@ -25,6 +25,10 @@ class AppConfig:
     work_start_hour: int = 9             # 上班时间（小时，24小时制）
     work_end_hour: int = 18              # 下班时间（小时，24小时制）
     work_days_per_month: int = 22        # 每月工作日数
+    # 摸鱼检测
+    idle_detect_enabled: bool = True     # 是否启用摸鱼检测
+    idle_sit_too_long_sec: int = 3600    # 久坐提醒阈值（秒，默认1小时）
+    idle_slacking_sec: int = 600         # 摸鱼判定阈值（秒，默认10分钟）
 
     def to_dict(self) -> dict:
         return asdict(self)

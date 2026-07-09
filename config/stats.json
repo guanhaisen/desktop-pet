@@ -1,0 +1,17 @@
+{
+  "total_interactions": 6,
+  "total_walks": 0,
+  "total_reminders_triggered": 0,
+  "checkin_dates": [
+    "2026-07-09"
+  ],
+  "last_checkin_date": "2026-07-09",
+  "total_slacking_count": 0,
+  "total_sit_too_long_count": 0,
+  "total_online_minutes": 5,
+  "last_online_ts": 0.0,
+  "unlocked_achievements": [
+    "first_checkin",
+    "first_interaction"
+  ]
+}

@@ -95,6 +95,27 @@ class SettingsDialog(QDialog):
 
         layout.addLayout(salary_form)
 
+        # ── 摸鱼检测 ──
+        layout.addWidget(self._section_label('摸鱼检测'))
+        idle_form = QFormLayout()
+
+        self._idle_check = QCheckBox('启用摸鱼检测')
+        idle_form.addRow('', self._idle_check)
+
+        self._idle_slacking_spin = QSpinBox()
+        self._idle_slacking_spin.setRange(60, 3600)
+        self._idle_slacking_spin.setSuffix(' 秒')
+        self._idle_slacking_spin.setSingleStep(60)
+        idle_form.addRow('摸鱼判定阈值:', self._idle_slacking_spin)
+
+        self._idle_sit_spin = QSpinBox()
+        self._idle_sit_spin.setRange(300, 7200)
+        self._idle_sit_spin.setSuffix(' 秒')
+        self._idle_sit_spin.setSingleStep(300)
+        idle_form.addRow('久坐提醒阈值:', self._idle_sit_spin)
+
+        layout.addLayout(idle_form)
+
         # ── 按钮 ──
         buttons = QDialogButtonBox(
             QDialogButtonBox.Ok | QDialogButtonBox.Cancel,
@@ -125,6 +146,10 @@ class SettingsDialog(QDialog):
         self._work_start_spin.setValue(cfg.work_start_hour)
         self._work_end_spin.setValue(cfg.work_end_hour)
         self._work_days_spin.setValue(cfg.work_days_per_month)
+        # 摸鱼检测
+        self._idle_check.setChecked(cfg.idle_detect_enabled)
+        self._idle_slacking_spin.setValue(cfg.idle_slacking_sec)
+        self._idle_sit_spin.setValue(cfg.idle_sit_too_long_sec)
 
     def _on_accept(self) -> None:
         cfg = self._config_mgr.app_config
@@ -141,6 +166,10 @@ class SettingsDialog(QDialog):
         cfg.work_start_hour = self._work_start_spin.value()
         cfg.work_end_hour = max(self._work_end_spin.value(), cfg.work_start_hour + 1)
         cfg.work_days_per_month = self._work_days_spin.value()
+        # 摸鱼检测
+        cfg.idle_detect_enabled = self._idle_check.isChecked()
+        cfg.idle_slacking_sec = self._idle_slacking_spin.value()
+        cfg.idle_sit_too_long_sec = max(self._idle_sit_spin.value(), cfg.idle_slacking_sec + 60)
         self._config_mgr.save_app_config()
         self.accept()
 

@@ -13,6 +13,8 @@ from src.reminder.reminder_dialog import ReminderDialog
 from src.config.config_manager import ConfigManager
 from src.ui.bubble import BubbleWindow
 from src.salary.salary_manager import SalaryManager
+from src.health.idle_detector import IdleDetector
+from src.progression.achievement_manager import AchievementManager
 from src.utils.path_helper import asset_path
 from src.utils.logger import logger
 
@@ -43,11 +45,14 @@ class PetApp(QObject):
         self._reminder_mgr = ReminderManager()
         self._bubble = BubbleWindow()
         self._salary_mgr = SalaryManager()
+        self._idle_detector = IdleDetector()
+        self._ach_mgr = AchievementManager()
 
         self._setup_tray()
         self._connect_signals()
         self._window.set_salary_manager(self._salary_mgr)
         self._load_data()
+        self._ach_mgr.start()
 
     def _setup_tray(self) -> None:
         if not self._tray.setup():
@@ -61,11 +66,13 @@ class PetApp(QObject):
         self._tray.manage_reminders.connect(self._on_manage_reminders)
         self._tray.toggle_settings.connect(self._on_settings)
         self._tray.walk_now.connect(self._on_walk_now)
+        self._tray.show_achievements.connect(self._on_achievements)
 
         # 窗口右键菜单信号
         self._window.settings_requested.connect(self._on_settings)
         self._window.add_reminder_requested.connect(self._on_add_reminder)
         self._window.manage_reminders_requested.connect(self._on_manage_reminders)
+        self._window.achievements_requested.connect(self._on_achievements)
         self._window.quit_requested.connect(self._on_quit)
 
         # 提醒触发信号
@@ -77,11 +84,25 @@ class PetApp(QObject):
         # 气泡系统信号
         self._window.bubble_requested.connect(self._on_bubble_requested)
         self._window.position_changed.connect(self._on_position_changed)
+        self._window.interacted.connect(self._ach_mgr.record_interaction)
 
         # 薪资系统信号
         self._salary_mgr.bubble_requested.connect(self._on_bubble_requested)
         self._salary_mgr.remind_requested.connect(self._on_salary_remind)
         self._salary_mgr.payday_info_changed.connect(self._on_payday_info_changed)
+
+        # 摸鱼检测信号（通过气泡显示吐槽）+ 统计埋点
+        self._idle_detector.slacking_detected.connect(self._on_bubble_requested)
+        self._idle_detector.sit_too_long.connect(self._on_bubble_requested)
+        self._idle_detector.slacking_detected.connect(
+            lambda _: self._ach_mgr.record_slacking()
+        )
+        self._idle_detector.sit_too_long.connect(
+            lambda _: self._ach_mgr.record_sit_too_long()
+        )
+
+        # 成就系统信号（解锁庆祝气泡）
+        self._ach_mgr.achievement_unlocked.connect(self._on_bubble_requested)
 
     def _load_data(self) -> None:
         # 加载提醒
@@ -108,6 +129,7 @@ class PetApp(QObject):
     def _on_walk_now(self) -> None:
         """手动指示桌宠去散步。"""
         self._window.trigger_walk()
+        self._ach_mgr.record_walk()
 
     def _on_quit(self) -> None:
         # 退出前保存配置
@@ -127,6 +149,12 @@ class PetApp(QObject):
         dialog = ReminderListDialog(self._reminder_mgr, parent=self._window)
         dialog.exec_()
 
+    def _on_achievements(self) -> None:
+        """打开成就列表对话框。"""
+        from src.progression.achievement_dialog import AchievementDialog
+        dialog = AchievementDialog(self._ach_mgr, parent=self._window)
+        dialog.exec_()
+
     def _on_settings(self) -> None:
         """打开设置对话框。"""
         from src.config.settings_dialog import SettingsDialog
@@ -138,6 +166,8 @@ class PetApp(QObject):
             self._window._anim_controller.scale = scale
             # 重新加载薪资系统（用户可能修改了薪资配置）
             self._salary_mgr.reload()
+            # 重新加载摸鱼检测（用户可能修改了开关或阈值）
+            self._idle_detector.reload()
             logger.info(f'缩放比例已更新: {scale}')
 
     def _on_reminder_triggered(self, reminder) -> None:
@@ -151,6 +181,7 @@ class PetApp(QObject):
             self._window.activateWindow()
         # trigger_remind 会立即弹出首次托盘通知并启动周期性重复通知
         self._window.trigger_remind(title, message)
+        self._ach_mgr.record_reminder()
 
     # ── 气泡处理 ──
 
@@ -174,6 +205,7 @@ class PetApp(QObject):
             self._window.raise_()
             self._window.activateWindow()
         self._window.trigger_remind(title, message)
+        self._ach_mgr.record_reminder()
 
     def _on_payday_info_changed(self, info: str) -> None:
         """发薪倒计时信息变化，更新托盘 tooltip。"""

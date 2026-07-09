@@ -26,6 +26,7 @@ class TrayManager(QObject):
     manage_reminders = pyqtSignal()
     toggle_settings = pyqtSignal()
     walk_now = pyqtSignal()
+    show_achievements = pyqtSignal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -72,6 +73,10 @@ class TrayManager(QObject):
         manage_action = QAction('管理提醒', menu)
         manage_action.triggered.connect(self.manage_reminders.emit)
         menu.addAction(manage_action)
+
+        achievements_action = QAction('🏆 打工成就', menu)
+        achievements_action.triggered.connect(self.show_achievements.emit)
+        menu.addAction(achievements_action)
 
         menu.addSeparator()
 

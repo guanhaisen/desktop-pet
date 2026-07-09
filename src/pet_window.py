@@ -11,6 +11,7 @@ from src.state.state_machine import StateMachine
 from src.animation.animation_controller import AnimationController
 from src.interaction.mouse_handler import MouseHandler
 from src.config.config_manager import ConfigManager
+from src.content.quotes import get_random_quote
 from src.utils.logger import logger
 
 
@@ -39,6 +40,13 @@ class PetWindow(QWidget):
     manage_reminders_requested = pyqtSignal()
     quit_requested = pyqtSignal()
     remind_notification = pyqtSignal(str, str)  # (title, message) 请求重复弹出托盘通知
+
+    # 气泡相关信号
+    bubble_requested = pyqtSignal(str)            # 请求显示气泡文字
+    position_changed = pyqtSignal(int, int, int)  # (x, y, width) 窗口位置变化，供气泡跟随
+
+    # 气泡触发概率（状态切换时随机弹出气泡的概率）
+    BUBBLE_TRIGGER_PROBABILITY = 0.3
 
     # 默认窗口尺寸
     DEFAULT_WIDTH = 200
@@ -185,6 +193,9 @@ class PetWindow(QWidget):
             self._walk_move_timer.stop()
             self._walk_stop_timer.stop()    # 离开行走状态时取消停止定时器
 
+        # 状态切换时随机触发气泡
+        self._maybe_show_bubble(state)
+
     def _on_clicked(self) -> None:
         # 提醒激活时，左键点击停止提醒
         if self._remind_active:
@@ -199,6 +210,8 @@ class PetWindow(QWidget):
     def _on_drag_finished(self) -> None:
         # 保存窗口位置
         self._config.update_window_position(self.x(), self.y())
+        # 通知气泡跟随新位置
+        self._emit_position()
         # 提醒激活时拖拽结束回到提醒状态，而非待机
         if self._remind_active:
             self._state_machine.transition_to(PetState.REMIND, force=True)
@@ -252,6 +265,8 @@ class PetWindow(QWidget):
             self._walk_direction = -1
 
         self.move(new_x, self.y())
+        # 行走时通知气泡跟随
+        self._emit_position()
 
     def _stop_walking(self) -> None:
         """行走停止定时器触发，回到 idle。"""
@@ -318,6 +333,32 @@ class PetWindow(QWidget):
         self._remind_repeat_timer.stop()
         self._remind_active = False
         self._state_machine.transition_to(PetState.IDLE, force=True)
+
+    # ── 气泡系统 ──
+
+    def _maybe_show_bubble(self, state: PetState) -> None:
+        """状态切换时按概率触发气泡。
+
+        DRAGGING 状态不弹气泡（拖拽中不方便看）。
+        """
+        if state == PetState.DRAGGING:
+            return
+        if random.random() < self.BUBBLE_TRIGGER_PROBABILITY:
+            quote = get_random_quote(state.state_name)
+            self.bubble_requested.emit(quote)
+
+    def show_bubble(self, text: str, duration_sec: int = 4) -> None:
+        """主动请求显示气泡（供外部调用，如后续的倒计时功能）。
+
+        参数:
+            text: 气泡文字
+            duration_sec: 显示时长（秒）
+        """
+        self.bubble_requested.emit(text)
+
+    def _emit_position(self) -> None:
+        """发出当前位置信号，供气泡跟随。"""
+        self.position_changed.emit(self.x(), self.y(), self.width())
 
     # ── 右键上下文菜单 ──
 

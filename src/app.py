@@ -11,6 +11,7 @@ from src.tray.tray_manager import TrayManager
 from src.reminder.reminder_manager import ReminderManager
 from src.reminder.reminder_dialog import ReminderDialog
 from src.config.config_manager import ConfigManager
+from src.ui.bubble import BubbleWindow
 from src.utils.path_helper import asset_path
 from src.utils.logger import logger
 
@@ -39,6 +40,7 @@ class PetApp(QObject):
         self._window = PetWindow()
         self._tray = TrayManager()
         self._reminder_mgr = ReminderManager()
+        self._bubble = BubbleWindow()
 
         self._setup_tray()
         self._connect_signals()
@@ -68,6 +70,10 @@ class PetApp(QObject):
 
         # 提醒期间重复托盘通知
         self._window.remind_notification.connect(self._tray.show_message)
+
+        # 气泡系统信号
+        self._window.bubble_requested.connect(self._on_bubble_requested)
+        self._window.position_changed.connect(self._on_position_changed)
 
     def _load_data(self) -> None:
         # 加载提醒
@@ -135,6 +141,19 @@ class PetApp(QObject):
             self._window.activateWindow()
         # trigger_remind 会立即弹出首次托盘通知并启动周期性重复通知
         self._window.trigger_remind(title, message)
+
+    # ── 气泡处理 ──
+
+    def _on_bubble_requested(self, text: str) -> None:
+        """收到气泡请求：显示气泡并同步当前桌宠位置。"""
+        self._bubble.follow_pos(
+            self._window.x(), self._window.y(), self._window.width()
+        )
+        self._bubble.show_message(text, duration_sec=4)
+
+    def _on_position_changed(self, x: int, y: int, width: int) -> None:
+        """桌宠位置变化时同步气泡位置。"""
+        self._bubble.follow_pos(x, y, width)
 
     # ── 运行 ──
 

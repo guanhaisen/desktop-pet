@@ -29,6 +29,9 @@ class AppConfig:
     idle_detect_enabled: bool = True     # 是否启用摸鱼检测
     idle_sit_too_long_sec: int = 3600    # 久坐提醒阈值（秒，默认1小时）
     idle_slacking_sec: int = 600         # 摸鱼判定阈值（秒，默认10分钟）
+    # 番茄钟
+    pomodoro_focus_min: int = 25         # 专注时长（分钟）
+    pomodoro_break_min: int = 5          # 休息时长（分钟）
 
     def to_dict(self) -> dict:
         return asdict(self)

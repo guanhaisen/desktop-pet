@@ -20,6 +20,8 @@ class StateMachine(QObject):
         PetState.REMIND: 100,
         PetState.INTERACT: 50,
         PetState.DRAGGING: 40,
+        PetState.FOCUS: 35,
+        PetState.MOYU: 30,
         PetState.WALK: 10,
         PetState.IDLE: 5,
         PetState.SLEEP: 1,

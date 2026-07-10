@@ -15,6 +15,7 @@ from src.ui.bubble import BubbleWindow
 from src.salary.salary_manager import SalaryManager
 from src.health.idle_detector import IdleDetector
 from src.progression.achievement_manager import AchievementManager
+from src.productivity.pomodoro import PomodoroManager
 from src.utils.path_helper import asset_path
 from src.utils.logger import logger
 
@@ -47,10 +48,12 @@ class PetApp(QObject):
         self._salary_mgr = SalaryManager()
         self._idle_detector = IdleDetector()
         self._ach_mgr = AchievementManager()
+        self._pomodoro_mgr = PomodoroManager()
 
         self._setup_tray()
         self._connect_signals()
         self._window.set_salary_manager(self._salary_mgr)
+        self._window.set_pomodoro_manager(self._pomodoro_mgr)
         self._load_data()
         self._ach_mgr.start()
 
@@ -91,8 +94,9 @@ class PetApp(QObject):
         self._salary_mgr.remind_requested.connect(self._on_salary_remind)
         self._salary_mgr.payday_info_changed.connect(self._on_payday_info_changed)
 
-        # 摸鱼检测信号（通过气泡显示吐槽）+ 统计埋点
+        # 摸鱼检测信号（通过气泡显示吐槽）+ 统计埋点 + 状态切换
         self._idle_detector.slacking_detected.connect(self._on_bubble_requested)
+        self._idle_detector.slacking_detected.connect(self._on_slacking_detected)
         self._idle_detector.sit_too_long.connect(self._on_bubble_requested)
         self._idle_detector.slacking_detected.connect(
             lambda _: self._ach_mgr.record_slacking()
@@ -103,6 +107,15 @@ class PetApp(QObject):
 
         # 成就系统信号（解锁庆祝气泡）
         self._ach_mgr.achievement_unlocked.connect(self._on_bubble_requested)
+
+        # 番茄钟信号
+        self._pomodoro_mgr.focus_started.connect(self._on_focus_started)
+        self._pomodoro_mgr.focus_finished.connect(self._on_focus_finished)
+        self._pomodoro_mgr.bubble_requested.connect(self._on_bubble_requested)
+        self._pomodoro_mgr.pomodoro_completed.connect(
+            lambda: self._ach_mgr.record_interaction()  # 番茄完成也算互动
+        )
+        self._window.pomodoro_toggle_requested.connect(self._on_pomodoro_toggle)
 
     def _load_data(self) -> None:
         # 加载提醒
@@ -210,6 +223,29 @@ class PetApp(QObject):
     def _on_payday_info_changed(self, info: str) -> None:
         """发薪倒计时信息变化，更新托盘 tooltip。"""
         self._tray.set_tooltip(info)
+
+    # ── 摸鱼检测处理 ──
+
+    def _on_slacking_detected(self, text: str) -> None:
+        """检测到摸鱼：切换桌宠到摸鱼动画状态。"""
+        self._window.trigger_moyu()
+
+    # ── 番茄钟处理 ──
+
+    def _on_pomodoro_toggle(self) -> None:
+        """切换番茄钟：未运行则开始，运行中则停止。"""
+        if self._pomodoro_mgr.is_running or self._pomodoro_mgr.is_break:
+            self._pomodoro_mgr.stop()
+        else:
+            self._pomodoro_mgr.start()
+
+    def _on_focus_started(self) -> None:
+        """番茄钟专注开始：切换到专注动画。"""
+        self._window.trigger_focus()
+
+    def _on_focus_finished(self) -> None:
+        """番茄钟专注结束：恢复待机。"""
+        self._window.stop_focus()
 
     # ── 运行 ──
 

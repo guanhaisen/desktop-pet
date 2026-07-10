@@ -41,6 +41,7 @@ class PetWindow(QWidget):
     manage_reminders_requested = pyqtSignal()
     quit_requested = pyqtSignal()
     achievements_requested = pyqtSignal()          # 请求打开成就列表
+    pomodoro_toggle_requested = pyqtSignal()        # 请求切换番茄钟
     remind_notification = pyqtSignal(str, str)  # (title, message) 请求重复弹出托盘通知
 
     # 气泡相关信号
@@ -89,12 +90,16 @@ class PetWindow(QWidget):
         # ── 薪资管理器（由 PetApp 注入，默认 None）──
         self._salary_mgr = None
 
+        # ── 番茄钟管理器（由 PetApp 注入，默认 None）──
+        self._pomodoro_mgr = None
+
         # ── 定时器 ──
         self._walk_timer = QTimer(self)       # 随机行走触发
         self._sleep_timer = QTimer(self)      # 空闲进入睡眠
         self._walk_move_timer = QTimer(self)  # 行走时持续移动
         self._walk_stop_timer = QTimer(self)  # 行走停止（单次）
         self._remind_repeat_timer = QTimer(self)  # 提醒期间重复通知
+        self._moyu_timer = QTimer(self)       # 摸鱼状态自动恢复（单次）
 
         self._walk_direction = 1  # 1=右, -1=左
         self._walk_speed = 2     # 每次移动像素
@@ -131,6 +136,10 @@ class PetWindow(QWidget):
 
         # 提醒重复通知定时器（周期性，直到用户点击停止）
         self._remind_repeat_timer.timeout.connect(self._on_remind_repeat)
+
+        # 摸鱼状态自动恢复定时器（单次，15 秒后回 IDLE）
+        self._moyu_timer.setSingleShot(True)
+        self._moyu_timer.timeout.connect(self._stop_moyu)
 
         # 心情系统：心情类别变化 → 更新动画
         self._mood_mgr.mood_category_changed.connect(
@@ -210,6 +219,10 @@ class PetWindow(QWidget):
             self._walk_move_timer.stop()
             self._walk_stop_timer.stop()    # 离开行走状态时取消停止定时器
 
+        # 摸鱼状态：不自动恢复，等用户互动
+        if state != PetState.MOYU:
+            self._moyu_timer.stop()
+
         # 状态切换时尝试增加心情值（5 分钟冷却）
         self._mood_mgr.try_increase()
 
@@ -221,6 +234,10 @@ class PetWindow(QWidget):
         if self._remind_active:
             self._stop_remind()
             logger.info('用户点击停止提醒')
+            return
+        # 摸鱼状态被点击时恢复待机
+        if self._state_machine.current_state == PetState.MOYU:
+            self._state_machine.transition_to(PetState.INTERACT)
             return
         self._state_machine.transition_to(PetState.INTERACT)
 
@@ -355,6 +372,40 @@ class PetWindow(QWidget):
         self._remind_active = False
         self._state_machine.transition_to(PetState.IDLE, force=True)
 
+    # ── 摸鱼状态 ──
+
+    def trigger_moyu(self) -> None:
+        """触发摸鱼状态：切换到 MOYU 动画。
+
+        在 IDLE/SLEEP/WALK/MOYU 状态下均可触发，
+        提醒、互动、拖拽等高优先级状态不打断。
+        """
+        current = self._state_machine.current_state
+        if current in (PetState.IDLE, PetState.SLEEP, PetState.WALK, PetState.MOYU):
+            self._state_machine.transition_to(PetState.MOYU, force=True)
+            logger.info(f'触发摸鱼状态（从 {current.state_name}）')
+        else:
+            logger.debug(f'摸鱼状态未触发，当前状态 {current.state_name} 优先级更高')
+
+    def _stop_moyu(self) -> None:
+        """摸鱼状态自动恢复到待机。"""
+        if self._state_machine.current_state == PetState.MOYU:
+            self._state_machine.transition_to(PetState.IDLE, force=True)
+            logger.info('摸鱼状态结束，恢复待机')
+
+    # ── 专注状态 ──
+
+    def trigger_focus(self) -> None:
+        """触发专注状态：切换到 FOCUS 动画。"""
+        self._state_machine.transition_to(PetState.FOCUS, force=True)
+        logger.info('触发专注状态')
+
+    def stop_focus(self) -> None:
+        """专注结束，恢复待机。"""
+        if self._state_machine.current_state == PetState.FOCUS:
+            self._state_machine.transition_to(PetState.IDLE, force=True)
+            logger.info('专注状态结束，恢复待机')
+
     # ── 气泡系统 ──
 
     def _maybe_show_bubble(self, state: PetState) -> None:
@@ -394,6 +445,18 @@ class PetWindow(QWidget):
         sleep_action = QAction('切换睡眠', menu)
         sleep_action.triggered.connect(self._toggle_sleep)
         menu.addAction(sleep_action)
+
+        moyu_action = QAction('切换摸鱼', menu)
+        moyu_action.triggered.connect(self._toggle_moyu)
+        menu.addAction(moyu_action)
+
+        # 番茄钟状态（动态显示：开始/专注中/休息中）
+        pomodoro_text = '🍅 开始番茄钟'
+        if self._pomodoro_mgr is not None:
+            pomodoro_text = self._pomodoro_mgr.get_status_text()
+        pomodoro_action = QAction(pomodoro_text, menu)
+        pomodoro_action.triggered.connect(self.pomodoro_toggle_requested.emit)
+        menu.addAction(pomodoro_action)
 
         idle_action = QAction('恢复待机', menu)
         idle_action.triggered.connect(self._force_idle)
@@ -465,6 +528,10 @@ class PetWindow(QWidget):
         """注入薪资管理器，供右键菜单显示发薪/下班倒计时。"""
         self._salary_mgr = mgr
 
+    def set_pomodoro_manager(self, mgr) -> None:
+        """注入番茄钟管理器，供右键菜单显示番茄钟状态。"""
+        self._pomodoro_mgr = mgr
+
     def _toggle_walk(self) -> None:
         """切换行走状态：行走中则停止，否则开始行走。"""
         if self._state_machine.current_state == PetState.WALK:
@@ -478,6 +545,13 @@ class PetWindow(QWidget):
             self._state_machine.transition_to(PetState.IDLE, force=True)
         else:
             self._state_machine.transition_to(PetState.SLEEP, force=True)
+
+    def _toggle_moyu(self) -> None:
+        """切换摸鱼状态：摸鱼中则恢复待机，否则进入摸鱼。"""
+        if self._state_machine.current_state == PetState.MOYU:
+            self._state_machine.transition_to(PetState.IDLE, force=True)
+        else:
+            self.trigger_moyu()
 
     def _force_idle(self) -> None:
         """强制恢复待机状态，忽略当前状态优先级。"""

@@ -116,6 +116,22 @@ class SettingsDialog(QDialog):
 
         layout.addLayout(idle_form)
 
+        # ── 番茄钟 ──
+        layout.addWidget(self._section_label('番茄钟'))
+        pomo_form = QFormLayout()
+
+        self._focus_min_spin = QSpinBox()
+        self._focus_min_spin.setRange(5, 120)
+        self._focus_min_spin.setSuffix(' 分钟')
+        pomo_form.addRow('专注时长:', self._focus_min_spin)
+
+        self._break_min_spin = QSpinBox()
+        self._break_min_spin.setRange(1, 30)
+        self._break_min_spin.setSuffix(' 分钟')
+        pomo_form.addRow('休息时长:', self._break_min_spin)
+
+        layout.addLayout(pomo_form)
+
         # ── 按钮 ──
         buttons = QDialogButtonBox(
             QDialogButtonBox.Ok | QDialogButtonBox.Cancel,
@@ -150,6 +166,9 @@ class SettingsDialog(QDialog):
         self._idle_check.setChecked(cfg.idle_detect_enabled)
         self._idle_slacking_spin.setValue(cfg.idle_slacking_sec)
         self._idle_sit_spin.setValue(cfg.idle_sit_too_long_sec)
+        # 番茄钟
+        self._focus_min_spin.setValue(cfg.pomodoro_focus_min)
+        self._break_min_spin.setValue(cfg.pomodoro_break_min)
 
     def _on_accept(self) -> None:
         cfg = self._config_mgr.app_config
@@ -170,6 +189,9 @@ class SettingsDialog(QDialog):
         cfg.idle_detect_enabled = self._idle_check.isChecked()
         cfg.idle_slacking_sec = self._idle_slacking_spin.value()
         cfg.idle_sit_too_long_sec = max(self._idle_sit_spin.value(), cfg.idle_slacking_sec + 60)
+        # 番茄钟
+        cfg.pomodoro_focus_min = self._focus_min_spin.value()
+        cfg.pomodoro_break_min = self._break_min_spin.value()
         self._config_mgr.save_app_config()
         self.accept()
 

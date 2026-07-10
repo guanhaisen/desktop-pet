@@ -11,6 +11,8 @@ class PetState(Enum):
     DRAGGING = 'dragging'  # 被拖拽中
     REMIND = 'remind'      # 提醒触发
     SLEEP = 'sleep'        # 长时间无操作进入睡眠
+    MOYU = 'moyv'          # 摸鱼中（资源名为 moyv.gif）
+    FOCUS = 'zhuanzhu'     # 专注工作中（资源名为 zhuanzhu.gif）
 
     @property
     def state_name(self) -> str:

@@ -1,5 +1,5 @@
 {
-  "total_interactions": 74,
+  "total_interactions": 113,
   "total_walks": 0,
   "total_reminders_triggered": 0,
   "checkin_dates": [
@@ -7,14 +7,15 @@
     "2026-07-10"
   ],
   "last_checkin_date": "2026-07-10",
-  "total_slacking_count": 6,
+  "total_slacking_count": 8,
   "total_sit_too_long_count": 0,
-  "total_online_minutes": 50,
+  "total_online_minutes": 80,
   "last_online_ts": 0.0,
   "unlocked_achievements": [
     "first_checkin",
     "first_interaction",
     "slacking_1",
-    "interactions_50"
+    "interactions_50",
+    "online_60min"
   ]
 }

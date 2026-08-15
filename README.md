@@ -284,6 +284,7 @@ python main.py
 desktop-pet/
 ├── main.py                          # 程序入口
 ├── requirements.txt                 # 依赖（仅 PyQt5）
+├── .gitignore                       # Git 忽略规则
 ├── assets/
 │   └── yuexinmiao/                  # 动画资源（GIF）
 │       ├── idle.gif                 # 待机
@@ -362,7 +363,7 @@ desktop-pet/
 
 ## 配置文件
 
-运行后自动生成 `config/` 目录：
+运行后自动生成 `config/` 目录（已被 `.gitignore` 忽略，不会提交到仓库）：
 
 | 文件 | 说明 |
 |------|------|
@@ -385,6 +386,14 @@ idle.gif, idle-happy.gif, idle-tired.gif, idle-emo.gif
 walk.gif, interact.gif, dragging.gif, sleep.gif
 remind.gif, moyv.gif, zhuanzhu.gif
 ```
+
+---
+
+## 开发说明
+
+- `config/` 目录存放运行时数据，已被 `.gitignore` 忽略
+- `__pycache__/` 和 `.pyc` 文件会被 Git 自动忽略
+- `.trae/` 和 `.uploads/` 为 IDE 内部目录，不纳入版本控制
 
 ---
 

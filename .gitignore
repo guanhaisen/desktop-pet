@@ -9,11 +9,18 @@ dist/
 build/
 *.egg-info/
 *.egg
+*.spec
+
+# PyInstaller build artifacts
+app.ico
 
 # Virtual environments
 venv/
 .venv/
 env/
+
+# Runtime logs
+logs/
 
 # IDE
 .vscode/

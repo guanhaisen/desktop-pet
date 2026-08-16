@@ -23,9 +23,10 @@ def setup_logger(name: str = 'yuexinmiao', level: int = logging.INFO) -> logging
         handler.setFormatter(formatter)
         logger.addHandler(handler)
     else:
-        # 无控制台时（pythonw.exe）写日志到文件，避免崩溃
+        # 无控制台时（pythonw.exe / 打包 --windowed）写日志到用户数据目录，避免崩溃
         import os
-        log_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'logs')
+        from src.utils.path_helper import get_user_data_dir
+        log_dir = os.path.join(get_user_data_dir(), 'logs')
         os.makedirs(log_dir, exist_ok=True)
         handler = logging.FileHandler(os.path.join(log_dir, 'pet.log'), encoding='utf-8')
         handler.setLevel(level)

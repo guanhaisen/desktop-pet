@@ -11,7 +11,6 @@
 
 - [功能一览](#功能一览)
 - [快速开始](#快速开始)
-- [打包成 exe](#打包成-exe)
 - [操作指南](#操作指南)
 - [功能详解与截图](#功能详解与截图)
 - [右键菜单](#右键菜单)
@@ -48,12 +47,15 @@
 
 ## 快速开始
 
-### 环境要求
+### 下载可执行文件（推荐）
 
-- Windows 10/11
-- Python 3.9+
+前往 [Releases 页面](https://github.com/guanhaisen/desktop-pet/releases) 下载 `YuexinMiao.exe`，双击即可运行，无需安装 Python 环境。
 
-### 安装与运行
+> 首次启动需几秒解压资源。若被 Windows SmartScreen 拦截，点击「更多信息 → 仍要运行」。
+
+### 从源码运行
+
+环境要求：Windows 10/11，Python 3.9+。
 
 ```bash
 # 克隆项目
@@ -68,50 +70,6 @@ python main.py
 ```
 
 > 依赖仅 `PyQt5>=5.15.0`，无需额外系统组件。
-
----
-
-## 打包成 exe
-
-使用 PyInstaller 可将项目打包为单个 `.exe` 文件，方便分发给无 Python 环境的用户。
-
-### 1. 安装打包工具
-
-```bash
-pip install pyinstaller
-```
-
-### 2.（可选）生成应用图标
-
-PyInstaller 的 `--icon` 需要 `.ico` 文件，可从现有 PNG 转换（需 Pillow）：
-
-```bash
-pip install Pillow
-python -c "from PIL import Image; Image.open('assets/yuexinmiao/yuexinmiao.png').save('app.ico', format='ICO', sizes=[(256,256),(128,128),(64,64),(48,48),(32,32),(16,16)])"
-```
-
-### 3. 执行打包
-
-在项目根目录执行（Windows PowerShell）：
-
-```bash
-pyinstaller --noconfirm --onefile --windowed --name "YuexinMiao" --icon "app.ico" --add-data "assets;assets" main.py
-```
-
-> - Windows 下 `--add-data` 的源与目标用分号 `;` 分隔（不是冒号）。
-> - 未生成图标可省略 `--icon "app.ico"`。
-> - 调试时若双击无反应，将 `--windowed` 换为 `--console` 重新打包，可在控制台查看报错。
-
-打包完成后，`dist/YuexinMiao.exe` 即为可执行文件。
-
-### 注意事项
-
-| 项目 | 说明 |
-|------|------|
-| 数据持久化 | 打包后运行时数据写入 `%APPDATA%\YuexinMiao\`，而非程序所在目录，配置和成就不会丢失 |
-| 首次启动 | 单文件模式需几秒解压资源，属正常现象 |
-| 资源包含 | `assets/` 已通过 `--add-data` 打入 exe；`config/` 不打包，首次运行自动生成默认值 |
-| 产物忽略 | `dist/`、`build/`、`*.spec`、`app.ico`、`logs/` 已在 `.gitignore` 中忽略 |
 
 ---
 

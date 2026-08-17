@@ -28,7 +28,6 @@ class ReminderManager(QObject):
         super().__init__(parent)
         self._reminders: list[Reminder] = []
         self._config = ConfigManager()
-        self._timers: dict[str, QTimer] = {}  # reminder.id → QTimer
         self._check_timer: QTimer = None
         self._last_check_minute: int = -1
 
@@ -56,23 +55,21 @@ class ReminderManager(QObject):
             return
         self._last_check_minute = current_minute
 
-        triggered_any = False
         for reminder in self._reminders:
             if not reminder.enabled:
                 continue
-            if reminder.hour == now.hour and reminder.minute == now.minute:
-                # none 类型只触发一次
-                if reminder.repeat == 'none':
-                    # 检查是否今天已经触发过
-                    pass  # 简化处理：none 类型仍然每天到点触发，由用户手动关闭
-                logger.info(f'提醒触发: {reminder}')
-                self.reminderTriggered.emit(reminder)
-                triggered_any = True
+            if reminder.hour != now.hour or reminder.minute != now.minute:
+                continue
+            # 每周提醒仅在指定星期触发
+            if reminder.repeat == 'weekly' and reminder.weekday != now.weekday():
+                continue
+            logger.info(f'提醒触发: {reminder}')
+            self.reminderTriggered.emit(reminder)
 
-                # none 类型触发后自动禁用
-                if reminder.repeat == 'none':
-                    reminder.enabled = False
-                    self.save()
+            # none 类型触发后自动禁用
+            if reminder.repeat == 'none':
+                reminder.enabled = False
+                self.save()
 
     # ── CRUD 接口 ──────────────────────────────────────────
 

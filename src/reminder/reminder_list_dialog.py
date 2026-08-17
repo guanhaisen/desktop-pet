@@ -67,9 +67,16 @@ class ReminderListDialog(QDialog):
 
     def _refresh_list(self) -> None:
         self._list.clear()
+        weekday_names = ['一', '二', '三', '四', '五', '六', '日']
         for r in self._mgr.list_all():
             status = '✓' if r.enabled else '✗'
-            text = f'{status}  {r.title}  ({r.hour:02d}:{r.minute:02d} {r.repeat})'
+            if r.repeat == 'weekly':
+                repeat_text = f'每周{weekday_names[r.weekday]}'
+            elif r.repeat == 'daily':
+                repeat_text = '每天'
+            else:
+                repeat_text = '仅一次'
+            text = f'{status}  {r.title}  ({r.hour:02d}:{r.minute:02d} {repeat_text})'
             item = QListWidgetItem(text)
             item.setData(Qt.UserRole, r.id)
             self._list.addItem(item)
@@ -82,7 +89,9 @@ class ReminderListDialog(QDialog):
 
     def _on_add(self) -> None:
         dialog = ReminderDialog(parent=self)
-        if dialog.exec_() == ReminderDialog.Accepted:
+        result = dialog.exec_()
+        dialog.deleteLater()
+        if result == ReminderDialog.Accepted:
             reminder = dialog.get_reminder()
             self._mgr.add(reminder)
             self._refresh_list()
@@ -96,7 +105,9 @@ class ReminderListDialog(QDialog):
         if not reminder:
             return
         dialog = ReminderDialog(reminder=reminder, parent=self)
-        if dialog.exec_() == ReminderDialog.Accepted:
+        result = dialog.exec_()
+        dialog.deleteLater()
+        if result == ReminderDialog.Accepted:
             updated = dialog.get_reminder()
             self._mgr.update(updated)
             self._refresh_list()

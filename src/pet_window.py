@@ -52,6 +52,9 @@ class PetWindow(QWidget):
     # 气泡触发概率（状态切换时随机弹出气泡的概率）
     BUBBLE_TRIGGER_PROBABILITY = 0.3
 
+    # 交互动画兜底时长（秒）：超过此时长仍未收到完成信号则强制回 IDLE
+    INTERACT_MAX_SEC = 8
+
     # 默认窗口尺寸
     DEFAULT_WIDTH = 200
     DEFAULT_HEIGHT = 200
@@ -99,7 +102,7 @@ class PetWindow(QWidget):
         self._walk_move_timer = QTimer(self)  # 行走时持续移动
         self._walk_stop_timer = QTimer(self)  # 行走停止（单次）
         self._remind_repeat_timer = QTimer(self)  # 提醒期间重复通知
-        self._moyu_timer = QTimer(self)       # 摸鱼状态自动恢复（单次）
+        self._interact_fallback_timer = QTimer(self)  # 交互动画兜底（单次）
 
         self._walk_direction = 1  # 1=右, -1=左
         self._walk_speed = 2     # 每次移动像素
@@ -137,9 +140,11 @@ class PetWindow(QWidget):
         # 提醒重复通知定时器（周期性，直到用户点击停止）
         self._remind_repeat_timer.timeout.connect(self._on_remind_repeat)
 
-        # 摸鱼状态自动恢复定时器（单次，15 秒后回 IDLE）
-        self._moyu_timer.setSingleShot(True)
-        self._moyu_timer.timeout.connect(self._stop_moyu)
+        # 交互动画兜底定时器（单次）：动画完成信号异常时强制回 IDLE
+        self._interact_fallback_timer.setSingleShot(True)
+        self._interact_fallback_timer.timeout.connect(
+            lambda: self._on_interact_finished('interact')
+        )
 
         # 心情系统：心情类别变化 → 更新动画
         self._mood_mgr.mood_category_changed.connect(
@@ -219,9 +224,11 @@ class PetWindow(QWidget):
             self._walk_move_timer.stop()
             self._walk_stop_timer.stop()    # 离开行走状态时取消停止定时器
 
-        # 摸鱼状态：不自动恢复，等用户互动
-        if state != PetState.MOYU:
-            self._moyu_timer.stop()
+        # 交互动画期间启动兜底定时器，其他状态清除
+        if state == PetState.INTERACT:
+            self._interact_fallback_timer.start(self.INTERACT_MAX_SEC * 1000)
+        else:
+            self._interact_fallback_timer.stop()
 
         # 状态切换时尝试增加心情值（5 分钟冷却）
         self._mood_mgr.try_increase()
@@ -245,8 +252,6 @@ class PetWindow(QWidget):
         self._state_machine.transition_to(PetState.DRAGGING)
 
     def _on_drag_finished(self) -> None:
-        # 保存窗口位置
-        self._config.update_window_position(self.x(), self.y())
         # 通知气泡跟随新位置
         self._emit_position()
         # 提醒激活时拖拽结束回到提醒状态，而非待机
@@ -256,7 +261,9 @@ class PetWindow(QWidget):
             self._state_machine.transition_to(PetState.IDLE, force=True)
 
     def _on_interact_finished(self, state_name: str) -> None:
-        if state_name == 'interact':
+        # 仅当仍处于互动状态时回到待机，避免误打断提醒/拖拽等更高优先级状态
+        if state_name == 'interact' and self._state_machine.current_state == PetState.INTERACT:
+            self._interact_fallback_timer.stop()
             self._state_machine.transition_to(PetState.IDLE, force=True)
 
     def _on_walk_triggered(self) -> None:
@@ -387,12 +394,6 @@ class PetWindow(QWidget):
         else:
             logger.debug(f'摸鱼状态未触发，当前状态 {current.state_name} 优先级更高')
 
-    def _stop_moyu(self) -> None:
-        """摸鱼状态自动恢复到待机。"""
-        if self._state_machine.current_state == PetState.MOYU:
-            self._state_machine.transition_to(PetState.IDLE, force=True)
-            logger.info('摸鱼状态结束，恢复待机')
-
     # ── 专注状态 ──
 
     def trigger_focus(self) -> None:
@@ -418,15 +419,6 @@ class PetWindow(QWidget):
         if random.random() < self.BUBBLE_TRIGGER_PROBABILITY:
             quote = get_random_quote(state.state_name)
             self.bubble_requested.emit(quote)
-
-    def show_bubble(self, text: str, duration_sec: int = 4) -> None:
-        """主动请求显示气泡（供外部调用，如后续的倒计时功能）。
-
-        参数:
-            text: 气泡文字
-            duration_sec: 显示时长（秒）
-        """
-        self.bubble_requested.emit(text)
 
     def _emit_position(self) -> None:
         """发出当前位置信号，供气泡跟随。"""
@@ -511,6 +503,7 @@ class PetWindow(QWidget):
         menu.addAction(quit_action)
 
         menu.exec_(pos)
+        menu.deleteLater()
 
     def _build_mood_label(self) -> str:
         """根据当前心情值生成右键菜单显示文本。"""

@@ -145,14 +145,14 @@ class PetApp(QObject):
         self._ach_mgr.record_walk()
 
     def _on_quit(self) -> None:
-        # 退出前保存配置
-        self._config.update_window_position(self._window.x(), self._window.y())
         logger.info('月薪喵退出')
         self._app.quit()
 
     def _on_add_reminder(self) -> None:
         dialog = ReminderDialog(parent=self._window)
-        if dialog.exec_() == ReminderDialog.Accepted:
+        result = dialog.exec_()
+        dialog.deleteLater()
+        if result == ReminderDialog.Accepted:
             reminder = dialog.get_reminder()
             self._reminder_mgr.add(reminder)
 
@@ -161,18 +161,22 @@ class PetApp(QObject):
         from src.reminder.reminder_list_dialog import ReminderListDialog
         dialog = ReminderListDialog(self._reminder_mgr, parent=self._window)
         dialog.exec_()
+        dialog.deleteLater()
 
     def _on_achievements(self) -> None:
         """打开成就列表对话框。"""
         from src.progression.achievement_dialog import AchievementDialog
         dialog = AchievementDialog(self._ach_mgr, parent=self._window)
         dialog.exec_()
+        dialog.deleteLater()
 
     def _on_settings(self) -> None:
         """打开设置对话框。"""
         from src.config.settings_dialog import SettingsDialog
         dialog = SettingsDialog(self._config, parent=self._window)
-        if dialog.exec_() == SettingsDialog.Accepted:
+        result = dialog.exec_()
+        dialog.deleteLater()
+        if result == SettingsDialog.Accepted:
             # 应用新设置
             scale = dialog.get_scale()
             self._config.update_scale(scale)

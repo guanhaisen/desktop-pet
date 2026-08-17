@@ -16,6 +16,7 @@ class GifPlayer:
         self._label: QLabel = None
         self._scale: float = 1.0
         self._frame_size: QSize = QSize()  # 缓存的帧尺寸
+        self._loop_finished_callback = None
 
     def set_label(self, label: QLabel) -> None:
         self._label = label
@@ -25,7 +26,11 @@ class GifPlayer:
         if self._movie and self._label:
             self._apply_scaled_size()
 
-    def start(self) -> None:
+    def set_loop_finished_callback(self, callback) -> None:
+        """设置单次播放完成回调（用于交互动画播完后回到 idle）。"""
+        self._loop_finished_callback = callback
+
+    def start(self, loop: bool = True) -> None:
         if not self._label:
             logger.warning('GifPlayer.start() 被调用但未设置 label')
             return
@@ -36,6 +41,8 @@ class GifPlayer:
         self._movie = QMovie(self._gif_path)
         if not self._movie.isValid():
             logger.warning(f'GIF 文件无法加载: {self._gif_path}')
+            if not loop and self._loop_finished_callback:
+                self._loop_finished_callback()
             return
 
         # 跳转到第一帧以获取实际帧尺寸
@@ -45,13 +52,27 @@ class GifPlayer:
             self._frame_size = pm.size()
             logger.debug(f'GIF 帧尺寸: {self._frame_size.width()}x{self._frame_size.height()}')
 
+        if not loop:
+            self._movie.frameChanged.connect(self._on_frame_changed)
+
         self._apply_scaled_size()
         self._label.setMovie(self._movie)
         self._movie.start()
-        logger.debug(f'GIF 播放开始: {self._gif_path}')
+        logger.debug(f'GIF 播放开始: {self._gif_path} (loop={loop})')
+
+    def _on_frame_changed(self, frame_number: int) -> None:
+        """单次播放模式：到达最后一帧时停止并回调。"""
+        if self._movie and frame_number >= self._movie.frameCount() - 1:
+            self._movie.stop()
+            if self._loop_finished_callback:
+                self._loop_finished_callback()
 
     def stop(self) -> None:
         if self._movie:
+            try:
+                self._movie.frameChanged.disconnect(self._on_frame_changed)
+            except TypeError:
+                pass  # 循环播放模式下未连接
             self._movie.stop()
             self._movie = None
 

@@ -52,11 +52,6 @@ class SettingsDialog(QDialog):
         self._sleep_spin.setSuffix(' 秒')
         form.addRow('空闲进入睡眠:', self._sleep_spin)
 
-        self._remind_spin = QSpinBox()
-        self._remind_spin.setRange(1, 60)
-        self._remind_spin.setSuffix(' 秒')
-        form.addRow('提醒动画时长:', self._remind_spin)
-
         layout.addLayout(form)
 
         # ── 薪资设置 ──
@@ -154,7 +149,6 @@ class SettingsDialog(QDialog):
         self._walk_min_spin.setValue(cfg.walk_interval_min_sec)
         self._walk_max_spin.setValue(cfg.walk_interval_max_sec)
         self._sleep_spin.setValue(cfg.idle_to_sleep_seconds)
-        self._remind_spin.setValue(cfg.remind_animation_duration_sec)
         # 薪资
         self._salary_check.setChecked(cfg.salary_enabled)
         self._salary_spin.setValue(cfg.monthly_salary)
@@ -177,7 +171,6 @@ class SettingsDialog(QDialog):
         cfg.walk_interval_min_sec = self._walk_min_spin.value()
         cfg.walk_interval_max_sec = max(self._walk_max_spin.value(), cfg.walk_interval_min_sec)
         cfg.idle_to_sleep_seconds = self._sleep_spin.value()
-        cfg.remind_animation_duration_sec = self._remind_spin.value()
         # 薪资
         cfg.salary_enabled = self._salary_check.isChecked()
         cfg.monthly_salary = self._salary_spin.value()

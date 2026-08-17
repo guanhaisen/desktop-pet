@@ -3,7 +3,7 @@
 import json
 import os
 import tempfile
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from dataclasses import dataclass, field, asdict
 
 from src.utils.path_helper import config_path, ensure_config_dir
@@ -28,7 +28,6 @@ class Stats:
 
     # 在线时长
     total_online_minutes: int = 0        # 累计在线分钟数
-    last_online_ts: float = 0.0          # 上次在线时间戳（用于计算增量）
 
     # 成就
     unlocked_achievements: list = field(default_factory=list)  # 已解锁成就 ID 列表
@@ -139,12 +138,13 @@ class StatsManager:
         consecutive = 0
         check_date = today
         for d_str in reversed(dates):
-            d = date.fromisoformat(d_str)
+            try:
+                d = date.fromisoformat(d_str)
+            except ValueError:
+                continue  # 跳过脏数据
             if d == check_date:
                 consecutive += 1
-                check_date = check_date.replace(day=check_date.day - 1) if check_date.day > 1 else None
-                if check_date is None:
-                    break
+                check_date -= timedelta(days=1)
             elif d < check_date:
                 break
         return consecutive

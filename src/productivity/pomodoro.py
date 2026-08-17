@@ -17,14 +17,12 @@ class PomodoroManager(QObject):
     信号:
         focus_started(): 专注开始，请求切换到 FOCUS 状态
         focus_finished(): 专注结束，请求恢复待机并提示休息
-        break_finished(): 休息结束，提示可开始下一轮
         bubble_requested(str): 请求显示气泡文字
         pomodoro_completed(): 一个完整番茄钟完成（专注+休息），供成就系统统计
     """
 
     focus_started = pyqtSignal()
     focus_finished = pyqtSignal()
-    break_finished = pyqtSignal()
     bubble_requested = pyqtSignal(str)
     pomodoro_completed = pyqtSignal()
 
@@ -46,10 +44,6 @@ class PomodoroManager(QObject):
     @property
     def is_break(self) -> bool:
         return self._is_break
-
-    @property
-    def completed_count(self) -> int:
-        return self._completed_count
 
     def get_status_text(self) -> str:
         """获取当前番茄钟状态文本（供右键菜单显示）。"""
@@ -113,7 +107,6 @@ class PomodoroManager(QObject):
             self._is_break = False
             self._completed_count += 1
 
-            self.break_finished.emit()
             self.pomodoro_completed.emit()
             self.bubble_requested.emit(f'休息结束！已完成 {self._completed_count} 个番茄钟，继续加油喵！')
             logger.info(f'番茄钟休息结束，已完成 {self._completed_count} 个')

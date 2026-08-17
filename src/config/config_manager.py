@@ -55,12 +55,6 @@ class ConfigManager:
         self._atomic_write(path, self._app_config.to_dict())
         logger.debug('app_config.json 已保存')
 
-    def update_window_position(self, x: int, y: int) -> None:
-        """更新并保存窗口位置。"""
-        self._app_config.window_x = x
-        self._app_config.window_y = y
-        self.save_app_config()
-
     def update_scale(self, scale: float) -> None:
         self._app_config.scale = scale
         self.save_app_config()

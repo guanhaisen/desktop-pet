@@ -31,7 +31,6 @@ class AnimationController(QObject):
         self._players: dict[str, object] = {}   # state_name → player
         self._player_types: dict[str, str] = {}  # state_name → 'gif'/'frame'
         self._current_state_name: str = None
-        self._frame_finished_callback = None
         # 心情类别（影响 idle 动画变体选择）
         self._mood_category: str = 'normal'
 
@@ -140,12 +139,10 @@ class AnimationController(QObject):
 
         self._current_state_name = state_name
 
-        # 对交互动画使用单次播放模式
-        if state == PetState.INTERACT and isinstance(player, FramePlayer):
+        # 对交互动画使用单次播放模式（GifPlayer 与 FramePlayer 均支持）
+        if state == PetState.INTERACT:
             player.set_loop_finished_callback(self._on_interact_finished)
             player.start(loop=False)
-        elif isinstance(player, GifPlayer):
-            player.start()
         else:
             player.start(loop=True)
 

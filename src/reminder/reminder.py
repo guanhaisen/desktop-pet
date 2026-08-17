@@ -2,7 +2,6 @@
 
 import uuid
 from dataclasses import dataclass, asdict, field
-from typing import Optional
 
 
 @dataclass
@@ -13,8 +12,8 @@ class Reminder:
     hour: int = 9
     minute: int = 0
     repeat: str = 'daily'          # none / daily / weekly
+    weekday: int = 0               # 每周提醒的星期（0=周一 … 6=周日），仅 repeat=weekly 时生效
     enabled: bool = True
-    animation_state: str = 'remind'
     id: str = field(default_factory=lambda: f'r-{uuid.uuid4().hex[:8]}')
 
     def to_dict(self) -> dict:

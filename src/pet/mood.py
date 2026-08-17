@@ -24,11 +24,9 @@ class MoodManager(QObject):
         - 心情值持久化到 app_config.json
 
     信号:
-        mood_changed(int): 心情值变化
         mood_category_changed(str): 心情类别变化 (happy/normal/tired/emo)
     """
 
-    mood_changed = pyqtSignal(int)
     mood_category_changed = pyqtSignal(str)
 
     # 心情阈值
@@ -89,7 +87,6 @@ class MoodManager(QObject):
         self._mood = min(self.MAX_MOOD, self._mood + self.INCREASE_AMOUNT)
         self._last_increase_ts = now
         self._save()
-        self.mood_changed.emit(self._mood)
         logger.info(f'心情增加 +{self.INCREASE_AMOUNT} → {self._mood}')
 
         new_category = self._compute_category(self._mood)
@@ -114,7 +111,6 @@ class MoodManager(QObject):
         old_category = self._mood_category
         self._mood = max(self.MIN_MOOD, self._mood - self.DECAY_AMOUNT)
         self._save()
-        self.mood_changed.emit(self._mood)
         logger.info(f'心情衰减 -{self.DECAY_AMOUNT} → {self._mood}')
 
         new_category = self._compute_category(self._mood)

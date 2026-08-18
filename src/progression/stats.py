@@ -6,6 +6,8 @@ import tempfile
 from datetime import datetime, date, timedelta
 from dataclasses import dataclass, field, asdict
 
+from PyQt5.QtCore import QObject, QTimer
+
 from src.utils.path_helper import config_path, ensure_config_dir
 from src.utils.logger import logger
 
@@ -46,12 +48,25 @@ class Stats:
         return cls()
 
 
-class StatsManager:
-    """统计数据的读写管理，原子写入模式。"""
+class StatsManager(QObject):
+    """统计数据的读写管理，原子写入 + 脏标记节流落盘。
 
-    def __init__(self):
+    高频统计（互动、在线分钟）只置脏标记，由定时器批量落盘；
+    打卡、成就解锁等低频关键事件仍立即写入。
+    """
+
+    # 脏数据落盘间隔（秒）
+    FLUSH_INTERVAL_SEC = 30
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
         ensure_config_dir()
         self._stats: Stats = self._load()
+        self._dirty = False
+        self._flush_timer = QTimer(self)
+        self._flush_timer.setInterval(self.FLUSH_INTERVAL_SEC * 1000)
+        self._flush_timer.timeout.connect(self._flush_if_dirty)
+        self._flush_timer.start()
 
     @property
     def stats(self) -> Stats:
@@ -71,7 +86,7 @@ class StatsManager:
             return Stats.default()
 
     def save(self) -> None:
-        """原子写入统计数据。"""
+        """立即原子写入统计数据。"""
         path = config_path('stats.json')
         dir_path = os.path.dirname(path)
         fd, tmp_path = tempfile.mkstemp(dir=dir_path, suffix='.tmp')
@@ -83,34 +98,48 @@ class StatsManager:
             if os.path.exists(tmp_path):
                 os.remove(tmp_path)
             raise
+        self._dirty = False
         logger.debug('stats.json 已保存')
+
+    def flush(self) -> None:
+        """有未落盘修改时立即写入（退出前调用）。"""
+        if self._dirty:
+            self.save()
+
+    def _flush_if_dirty(self) -> None:
+        """定时器回调：有脏数据则落盘。"""
+        if self._dirty:
+            self.save()
+
+    def _mark_dirty(self) -> None:
+        self._dirty = True
 
     # ── 统计更新方法 ──
 
     def record_interaction(self) -> None:
         """记录一次互动。"""
         self._stats.total_interactions += 1
-        self.save()
+        self._mark_dirty()
 
     def record_walk(self) -> None:
         """记录一次散步。"""
         self._stats.total_walks += 1
-        self.save()
+        self._mark_dirty()
 
     def record_reminder(self) -> None:
         """记录一次提醒触发。"""
         self._stats.total_reminders_triggered += 1
-        self.save()
+        self._mark_dirty()
 
     def record_slacking(self) -> None:
         """记录一次摸鱼检测。"""
         self._stats.total_slacking_count += 1
-        self.save()
+        self._mark_dirty()
 
     def record_sit_too_long(self) -> None:
         """记录一次久坐提醒。"""
         self._stats.total_sit_too_long_count += 1
-        self.save()
+        self._mark_dirty()
 
     def checkin(self) -> bool:
         """每日打卡。返回是否为今日首次打卡（True=首次，False=已打过）。"""
@@ -127,7 +156,7 @@ class StatsManager:
     def add_online_minutes(self, minutes: int) -> None:
         """累加在线时长。"""
         self._stats.total_online_minutes += minutes
-        self.save()
+        self._mark_dirty()
 
     def get_consecutive_days(self) -> int:
         """计算连续打卡天数。"""

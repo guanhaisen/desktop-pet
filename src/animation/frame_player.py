@@ -3,7 +3,7 @@
 import glob
 import os
 
-from PyQt5.QtCore import QTimer, QSize
+from PyQt5.QtCore import QTimer, QSize, Qt
 from PyQt5.QtGui import QPixmap
 from PyQt5.QtWidgets import QLabel
 
@@ -17,10 +17,12 @@ class FramePlayer:
         self._frames_dir = frames_dir
         self._frame_interval = frame_interval_ms
         self._frames: list[QPixmap] = []
+        self._scaled_frames: list[QPixmap] = None  # 当前 scale 下的预缩放缓存
         self._current_index: int = 0
         self._timer: QTimer = None
         self._label: QLabel = None
         self._scale: float = 1.0
+        self._loop = True
         self._loop_finished_callback = None
 
     def load_frames(self) -> bool:
@@ -43,7 +45,10 @@ class FramePlayer:
         self._label = label
 
     def set_scale(self, scale: float) -> None:
+        if self._scale == scale:
+            return
         self._scale = scale
+        self._scaled_frames = None  # 失效缓存，下次播放时按新 scale 重建
 
     def set_loop_finished_callback(self, callback) -> None:
         """设置单次播放完成回调（用于交互动画播完后回到 idle）。"""
@@ -60,19 +65,19 @@ class FramePlayer:
 
         self.stop()
         self._current_index = 0
-        self._show_current_frame()
-
-        self._timer = QTimer()
-        self._timer.timeout.connect(self._next_frame)
-        self._timer.start(self._frame_interval)
-
         self._loop = loop
+
+        if self._timer is None:
+            self._timer = QTimer()
+            self._timer.timeout.connect(self._next_frame)
+
+        self._show_current_frame()
+        self._timer.start(self._frame_interval)
         logger.debug(f'帧动画播放开始: {self._frames_dir} (loop={loop})')
 
     def stop(self) -> None:
         if self._timer:
             self._timer.stop()
-            self._timer = None
 
     def _next_frame(self) -> None:
         self._current_index += 1
@@ -82,7 +87,6 @@ class FramePlayer:
             else:
                 # 单次播放完毕
                 self._timer.stop()
-                self._timer = None
                 if self._loop_finished_callback:
                     self._loop_finished_callback()
                 return
@@ -92,12 +96,19 @@ class FramePlayer:
     def _show_current_frame(self) -> None:
         if not self._frames or not self._label:
             return
+        self._label.setPixmap(self._display_frames()[self._current_index])
 
-        frame = self._frames[self._current_index]
-        if self._scale != 1.0:
-            size = QSize(
-                int(frame.width() * self._scale),
-                int(frame.height() * self._scale)
-            )
-            frame = frame.scaled(size, aspectMode=1)  # Qt.KeepAspectRatio
-        self._label.setPixmap(frame)
+    def _display_frames(self) -> list[QPixmap]:
+        """返回当前 scale 下的帧序列（预缩放缓存，避免每帧重复 scaled()）。"""
+        if self._scaled_frames is None:
+            if abs(self._scale - 1.0) < 1e-6:
+                self._scaled_frames = self._frames
+            else:
+                self._scaled_frames = [
+                    f.scaled(
+                        QSize(int(f.width() * self._scale), int(f.height() * self._scale)),
+                        Qt.KeepAspectRatio,
+                    )
+                    for f in self._frames
+                ]
+        return self._scaled_frames

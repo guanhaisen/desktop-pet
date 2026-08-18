@@ -39,6 +39,8 @@ class PetApp(QObject):
         self._app.setWindowIcon(QIcon(asset_path('yuexinmiao', 'yuexinmiao.png')))
         # 确保最后一个窗口关闭时不自动退出（我们用托盘控制）
         self._app.setQuitOnLastWindowClosed(False)
+        # 退出前落盘统计数据（高频统计采用节流写入）
+        self._app.aboutToQuit.connect(self._on_about_to_quit)
 
         self._config = ConfigManager()
         self._window = PetWindow()
@@ -147,6 +149,10 @@ class PetApp(QObject):
     def _on_quit(self) -> None:
         logger.info('月薪喵退出')
         self._app.quit()
+
+    def _on_about_to_quit(self) -> None:
+        """退出前强制落盘未保存的统计数据。"""
+        self._ach_mgr.stats_mgr.flush()
 
     def _on_add_reminder(self) -> None:
         dialog = ReminderDialog(parent=self._window)

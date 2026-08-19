@@ -1,9 +1,13 @@
-"""桌宠主窗口：透明无边框置顶窗口，承载动画与交互。"""
+"""桌宠主窗口：透明无边框置顶窗口，承载动画与交互。
+
+行走/提醒/右键菜单逻辑分别拆分至：
+  src/pet/walk_controller.py / src/pet/remind_controller.py / src/ui/context_menu.py
+"""
 
 import random
 
-from PyQt5.QtWidgets import QWidget, QLabel, QApplication, QMenu, QAction
-from PyQt5.QtCore import Qt, QTimer, QPoint, pyqtSignal
+from PyQt5.QtWidgets import QWidget, QLabel, QApplication
+from PyQt5.QtCore import Qt, QTimer, pyqtSignal
 from PyQt5.QtGui import QMouseEvent
 
 from src.state.states import PetState
@@ -13,6 +17,9 @@ from src.interaction.mouse_handler import MouseHandler
 from src.config.config_manager import ConfigManager
 from src.content.quotes import get_random_quote
 from src.pet.mood import MoodManager
+from src.pet.walk_controller import WalkController
+from src.pet.remind_controller import RemindController
+from src.ui.context_menu import PetContextMenu
 from src.utils.logger import logger
 
 
@@ -20,12 +27,9 @@ class PetWindow(QWidget):
     """月薪喵桌面宠物主窗口。
 
     职责:
-      - 透明无边框置顶窗口
-      - QLabel 承载动画
+      - 透明无边框置顶窗口，QLabel 承载动画
       - 委托 MouseHandler 处理鼠标事件
-      - 状态机驱动动画切换
-      - 自动行走与睡眠定时器
-      - 右键上下文菜单（切换行走/睡眠、恢复待机、提醒、设置、退出）
+      - 状态机驱动动画切换与各控制器联动
       - 拦截 closeEvent 隐藏到托盘
 
     信号:
@@ -90,27 +94,14 @@ class PetWindow(QWidget):
         # ── 心情管理器 ──
         self._mood_mgr = MoodManager(self)
 
-        # ── 薪资管理器（由 PetApp 注入，默认 None）──
-        self._salary_mgr = None
-
-        # ── 番茄钟管理器（由 PetApp 注入，默认 None）──
-        self._pomodoro_mgr = None
+        # ── 控制器 ──
+        self._walk_ctrl = WalkController(self, self._state_machine, self._config, parent=self)
+        self._remind_ctrl = RemindController(self._state_machine, parent=self)
+        self._context_menu = PetContextMenu(self._mood_mgr, parent=self)
 
         # ── 定时器 ──
-        self._walk_timer = QTimer(self)       # 随机行走触发
         self._sleep_timer = QTimer(self)      # 空闲进入睡眠
-        self._walk_move_timer = QTimer(self)  # 行走时持续移动
-        self._walk_stop_timer = QTimer(self)  # 行走停止（单次）
-        self._remind_repeat_timer = QTimer(self)  # 提醒期间重复通知
         self._interact_fallback_timer = QTimer(self)  # 交互动画兜底（单次）
-
-        self._walk_direction = 1  # 1=右, -1=左
-        self._walk_speed = 2     # 每次移动像素
-
-        # 提醒状态
-        self._remind_active: bool = False
-        self._remind_title: str = ''
-        self._remind_message: str = ''
 
         self._setup_connections()
         self._setup_window()
@@ -121,30 +112,43 @@ class PetWindow(QWidget):
 
         # 鼠标交互
         self._mouse_handler.clicked.connect(self._on_clicked)
-        self._mouse_handler.right_clicked.connect(self._show_context_menu)
+        self._mouse_handler.right_clicked.connect(self._context_menu.exec)
         self._mouse_handler.drag_started.connect(self._on_drag_started)
         self._mouse_handler.drag_finished.connect(self._on_drag_finished)
 
         # 交互动画播放完毕
         self._anim_controller.animationFinished.connect(self._on_interact_finished)
 
-        # 行走定时器
-        self._walk_timer.timeout.connect(self._on_walk_triggered)
-        self._walk_move_timer.timeout.connect(self._do_walk_move)
-        self._walk_stop_timer.setSingleShot(True)
-        self._walk_stop_timer.timeout.connect(self._stop_walking)
+        # 行走控制器：移动时气泡跟随
+        self._walk_ctrl.moved.connect(
+            lambda x, y, w: self.position_changed.emit(x, y, w)
+        )
+
+        # 提醒控制器：托盘通知转发
+        self._remind_ctrl.notification.connect(self.remind_notification.emit)
 
         # 睡眠定时器
-        self._sleep_timer.timeout.connect(self._on_sleep_triggered)
-
-        # 提醒重复通知定时器（周期性，直到用户点击停止）
-        self._remind_repeat_timer.timeout.connect(self._on_remind_repeat)
+        self._sleep_timer.timeout.connect(
+            lambda: self._state_machine.transition_to(PetState.SLEEP)
+        )
 
         # 交互动画兜底定时器（单次）：动画完成信号异常时强制回 IDLE
         self._interact_fallback_timer.setSingleShot(True)
         self._interact_fallback_timer.timeout.connect(
             lambda: self._on_interact_finished('interact')
         )
+
+        # 右键菜单 → 状态切换
+        self._context_menu.walk_toggled.connect(self._toggle_walk)
+        self._context_menu.sleep_toggled.connect(self._toggle_sleep)
+        self._context_menu.moyu_toggled.connect(self._toggle_moyu)
+        self._context_menu.force_idle_requested.connect(self._force_idle)
+        self._context_menu.pomodoro_toggled.connect(self.pomodoro_toggle_requested.emit)
+        self._context_menu.add_reminder_requested.connect(self.add_reminder_requested.emit)
+        self._context_menu.manage_reminders_requested.connect(self.manage_reminders_requested.emit)
+        self._context_menu.achievements_requested.connect(self.achievements_requested.emit)
+        self._context_menu.settings_requested.connect(self.settings_requested.emit)
+        self._context_menu.quit_requested.connect(self.quit_requested.emit)
 
         # 心情系统：心情类别变化 → 更新动画
         self._mood_mgr.mood_category_changed.connect(
@@ -218,11 +222,7 @@ class PetWindow(QWidget):
         else:
             self._stop_idle_timers()
 
-        if state == PetState.WALK:
-            self._walk_move_timer.start(30)  # 30ms 移动一次
-        else:
-            self._walk_move_timer.stop()
-            self._walk_stop_timer.stop()    # 离开行走状态时取消停止定时器
+        self._walk_ctrl.on_state_changed(state)
 
         # 交互动画期间启动兜底定时器，其他状态清除
         if state == PetState.INTERACT:
@@ -238,8 +238,8 @@ class PetWindow(QWidget):
 
     def _on_clicked(self) -> None:
         # 提醒激活时，左键点击停止提醒
-        if self._remind_active:
-            self._stop_remind()
+        if self._remind_ctrl.is_active:
+            self._remind_ctrl.stop()
             logger.info('用户点击停止提醒')
             return
         # 摸鱼状态被点击时恢复待机
@@ -255,7 +255,7 @@ class PetWindow(QWidget):
         # 通知气泡跟随新位置
         self._emit_position()
         # 提醒激活时拖拽结束回到提醒状态，而非待机
-        if self._remind_active:
+        if self._remind_ctrl.is_active:
             self._state_machine.transition_to(PetState.REMIND, force=True)
         else:
             self._state_machine.transition_to(PetState.IDLE, force=True)
@@ -266,12 +266,7 @@ class PetWindow(QWidget):
             self._interact_fallback_timer.stop()
             self._state_machine.transition_to(PetState.IDLE, force=True)
 
-    def _on_walk_triggered(self) -> None:
-        """随机行走定时器触发。"""
-        if self._remind_active:
-            return
-        if self._config.app_config.auto_walk_enabled:
-            self._start_walk()
+    # ── 行走 ──
 
     def trigger_walk(self) -> None:
         """手动指示行走（不受自动行走开关影响）。
@@ -280,257 +275,15 @@ class PetWindow(QWidget):
         """
         if self._state_machine.current_state in (PetState.IDLE, PetState.SLEEP):
             self._mood_mgr.record_interaction()  # 托盘操作也算互动
-            self._start_walk()
+            self._walk_ctrl.start_walk()
             logger.info('收到手动行走指示')
-
-    def _start_walk(self) -> None:
-        """开始一次行走：切换状态、随机方向、设定停止时刻。"""
-        self._state_machine.transition_to(PetState.WALK, force=True)
-        # 随机选择方向
-        self._walk_direction = random.choice([1, -1])
-        # 设置一次性停止定时器（行走 2-5 秒后停止）
-        walk_duration_ms = random.randint(2000, 5000)
-        self._walk_stop_timer.start(walk_duration_ms)
-
-    def _on_sleep_triggered(self) -> None:
-        """空闲超时进入睡眠。"""
-        self._state_machine.transition_to(PetState.SLEEP)
-
-    def _do_walk_move(self) -> None:
-        """行走时持续移动窗口位置。"""
-        new_x = self.x() + self._walk_direction * self._walk_speed
-        screen = QApplication.desktop().availableGeometry()
-
-        # 边界检测：碰到屏幕边缘反向
-        if new_x <= screen.left():
-            new_x = screen.left()
-            self._walk_direction = 1
-        elif new_x + self.width() >= screen.right():
-            new_x = screen.right() - self.width()
-            self._walk_direction = -1
-
-        self.move(new_x, self.y())
-        # 行走时通知气泡跟随
-        self._emit_position()
-
-    def _stop_walking(self) -> None:
-        """行走停止定时器触发，回到 idle。"""
-        if self._state_machine.current_state == PetState.WALK:
-            self._state_machine.transition_to(PetState.IDLE, force=True)
-
-    # ── 定时器管理 ──
-
-    def _start_idle_timers(self) -> None:
-        """启动空闲状态的定时器（随机行走 + 睡眠触发）。"""
-        cfg = self._config.app_config
-        if cfg.auto_walk_enabled:
-            min_sec = cfg.walk_interval_min_sec
-            max_sec = cfg.walk_interval_max_sec
-            interval = random.randint(min_sec, max_sec) * 1000
-            self._walk_timer.start(interval)
-
-        sleep_ms = cfg.idle_to_sleep_seconds * 1000
-        self._sleep_timer.start(sleep_ms)
-
-    def _stop_idle_timers(self) -> None:
-        self._walk_timer.stop()
-        self._sleep_timer.stop()
-
-    def reset_idle_timer(self) -> None:
-        """重置空闲计时（任何交互后调用）。"""
-        self._stop_idle_timers()
-        if self._state_machine.current_state == PetState.IDLE:
-            self._start_idle_timers()
-
-    # ── 提醒触发 ──
-
-    # 提醒期间重复弹出托盘通知的间隔（秒）
-    REMIND_NOTIFY_INTERVAL_SEC = 10
-
-    def trigger_remind(self, title: str = '', message: str = '') -> None:
-        """触发提醒状态：持续播放提醒动画并周期性通知，直到用户左键点击。
-
-        参数:
-            title: 提醒标题（用于托盘通知）
-            message: 提醒内容（用于托盘通知）
-        """
-        self._remind_title = title or '提醒'
-        self._remind_message = message or '该注意啦！'
-        self._remind_active = True
-
-        # 切换到提醒动画（强制，REMIND 优先级最高）
-        self._state_machine.transition_to(PetState.REMIND, force=True)
-
-        # 立即弹出一次托盘通知
-        self.remind_notification.emit(self._remind_title, self._remind_message)
-
-        # 启动周期性重复通知定时器
-        self._remind_repeat_timer.start(self.REMIND_NOTIFY_INTERVAL_SEC * 1000)
-        logger.info(f'提醒已触发，将持续提醒直到用户点击: {self._remind_title}')
-
-    def _on_remind_repeat(self) -> None:
-        """提醒期间周期性重复弹出托盘通知。"""
-        if self._remind_active:
-            self.remind_notification.emit(self._remind_title, self._remind_message)
-
-    def _stop_remind(self) -> None:
-        """停止提醒：关闭重复通知定时器并回到待机状态。"""
-        self._remind_repeat_timer.stop()
-        self._remind_active = False
-        self._state_machine.transition_to(PetState.IDLE, force=True)
-
-    # ── 摸鱼状态 ──
-
-    def trigger_moyu(self) -> None:
-        """触发摸鱼状态：切换到 MOYU 动画。
-
-        在 IDLE/SLEEP/WALK/MOYU 状态下均可触发，
-        提醒、互动、拖拽等高优先级状态不打断。
-        """
-        current = self._state_machine.current_state
-        if current in (PetState.IDLE, PetState.SLEEP, PetState.WALK, PetState.MOYU):
-            self._state_machine.transition_to(PetState.MOYU, force=True)
-            logger.info(f'触发摸鱼状态（从 {current.state_name}）')
-        else:
-            logger.debug(f'摸鱼状态未触发，当前状态 {current.state_name} 优先级更高')
-
-    # ── 专注状态 ──
-
-    def trigger_focus(self) -> None:
-        """触发专注状态：切换到 FOCUS 动画。"""
-        self._state_machine.transition_to(PetState.FOCUS, force=True)
-        logger.info('触发专注状态')
-
-    def stop_focus(self) -> None:
-        """专注结束，恢复待机。"""
-        if self._state_machine.current_state == PetState.FOCUS:
-            self._state_machine.transition_to(PetState.IDLE, force=True)
-            logger.info('专注状态结束，恢复待机')
-
-    # ── 气泡系统 ──
-
-    def _maybe_show_bubble(self, state: PetState) -> None:
-        """状态切换时按概率触发气泡。
-
-        DRAGGING 状态不弹气泡（拖拽中不方便看）。
-        """
-        if state == PetState.DRAGGING:
-            return
-        if random.random() < self.BUBBLE_TRIGGER_PROBABILITY:
-            quote = get_random_quote(state.state_name)
-            self.bubble_requested.emit(quote)
-
-    def _emit_position(self) -> None:
-        """发出当前位置信号，供气泡跟随。"""
-        self.position_changed.emit(self.x(), self.y(), self.width())
-
-    # ── 右键上下文菜单 ──
-
-    def _show_context_menu(self, pos: QPoint) -> None:
-        """在鼠标位置显示右键上下文菜单。"""
-        menu = QMenu(self)
-
-        walk_action = QAction('切换行走', menu)
-        walk_action.triggered.connect(self._toggle_walk)
-        menu.addAction(walk_action)
-
-        sleep_action = QAction('切换睡眠', menu)
-        sleep_action.triggered.connect(self._toggle_sleep)
-        menu.addAction(sleep_action)
-
-        moyu_action = QAction('切换摸鱼', menu)
-        moyu_action.triggered.connect(self._toggle_moyu)
-        menu.addAction(moyu_action)
-
-        # 番茄钟状态（动态显示：开始/专注中/休息中）
-        pomodoro_text = '🍅 开始番茄钟'
-        if self._pomodoro_mgr is not None:
-            pomodoro_text = self._pomodoro_mgr.get_status_text()
-        pomodoro_action = QAction(pomodoro_text, menu)
-        pomodoro_action.triggered.connect(self.pomodoro_toggle_requested.emit)
-        menu.addAction(pomodoro_action)
-
-        idle_action = QAction('恢复待机', menu)
-        idle_action.triggered.connect(self._force_idle)
-        menu.addAction(idle_action)
-
-        menu.addSeparator()
-
-        # 心情值显示（只读，不可点击）
-        mood_label = self._build_mood_label()
-        mood_action = QAction(mood_label, menu)
-        mood_action.setEnabled(False)
-        menu.addAction(mood_action)
-
-        # 薪资信息显示（发薪倒计时 + 下班倒计时）
-        if self._salary_mgr is not None and self._salary_mgr._is_enabled():
-            payday_info = f'发薪：{self._salary_mgr.get_payday_countdown()} 天后'
-            if self._salary_mgr.get_payday_countdown() == 0:
-                payday_info = '发薪：今天发薪日！'
-            payday_action = QAction(payday_info, menu)
-            payday_action.setEnabled(False)
-            menu.addAction(payday_action)
-
-            offwork_info = self._salary_mgr.get_offwork_countdown()
-            offwork_action = QAction(offwork_info, menu)
-            offwork_action.setEnabled(False)
-            menu.addAction(offwork_action)
-
-        menu.addSeparator()
-
-        add_reminder_action = QAction('添加提醒...', menu)
-        add_reminder_action.triggered.connect(self.add_reminder_requested.emit)
-        menu.addAction(add_reminder_action)
-
-        manage_reminders_action = QAction('管理提醒', menu)
-        manage_reminders_action.triggered.connect(self.manage_reminders_requested.emit)
-        menu.addAction(manage_reminders_action)
-
-        achievements_action = QAction('🏆 打工成就', menu)
-        achievements_action.triggered.connect(self.achievements_requested.emit)
-        menu.addAction(achievements_action)
-
-        menu.addSeparator()
-
-        settings_action = QAction('设置...', menu)
-        settings_action.triggered.connect(self.settings_requested.emit)
-        menu.addAction(settings_action)
-
-        menu.addSeparator()
-
-        quit_action = QAction('退出', menu)
-        quit_action.triggered.connect(self.quit_requested.emit)
-        menu.addAction(quit_action)
-
-        menu.exec_(pos)
-        menu.deleteLater()
-
-    def _build_mood_label(self) -> str:
-        """根据当前心情值生成右键菜单显示文本。"""
-        value = self._mood_mgr.mood
-        category = self._mood_mgr.mood_category
-        category_text = {
-            'happy': '开心',
-            'normal': '普通',
-            'tired': '疲惫',
-            'emo': 'emo',
-        }.get(category, '普通')
-        return f'心情：{value}（{category_text}）'
-
-    def set_salary_manager(self, mgr) -> None:
-        """注入薪资管理器，供右键菜单显示发薪/下班倒计时。"""
-        self._salary_mgr = mgr
-
-    def set_pomodoro_manager(self, mgr) -> None:
-        """注入番茄钟管理器，供右键菜单显示番茄钟状态。"""
-        self._pomodoro_mgr = mgr
 
     def _toggle_walk(self) -> None:
         """切换行走状态：行走中则停止，否则开始行走。"""
-        if self._state_machine.current_state == PetState.WALK:
+        if self._walk_ctrl.is_walking:
             self._state_machine.transition_to(PetState.IDLE, force=True)
         else:
-            self._start_walk()
+            self._walk_ctrl.start_walk()
 
     def _toggle_sleep(self) -> None:
         """切换睡眠状态：睡眠中则唤醒，否则进入睡眠。"""
@@ -549,6 +302,78 @@ class PetWindow(QWidget):
     def _force_idle(self) -> None:
         """强制恢复待机状态，忽略当前状态优先级。"""
         self._state_machine.transition_to(PetState.IDLE, force=True)
+
+    # ── 定时器管理 ──
+
+    def _start_idle_timers(self) -> None:
+        """启动空闲状态的定时器（随机行走 + 睡眠触发）。"""
+        self._walk_ctrl.start_auto_interval()
+        self._sleep_timer.start(self._config.app_config.idle_to_sleep_seconds * 1000)
+
+    def _stop_idle_timers(self) -> None:
+        self._walk_ctrl.stop_auto_interval()
+        self._sleep_timer.stop()
+
+    def reset_idle_timer(self) -> None:
+        """重置空闲计时（任何交互后调用）。"""
+        self._stop_idle_timers()
+        if self._state_machine.current_state == PetState.IDLE:
+            self._start_idle_timers()
+
+    # ── 状态触发（供 PetApp 调用）──
+
+    def trigger_remind(self, title: str = '', message: str = '') -> None:
+        """触发提醒状态，参数含义见 RemindController.trigger。"""
+        self._remind_ctrl.trigger(title, message)
+
+    def trigger_moyu(self) -> None:
+        """触发摸鱼状态：切换到 MOYU 动画。
+
+        在 IDLE/SLEEP/WALK/MOYU 状态下均可触发，
+        提醒、互动、拖拽等高优先级状态不打断。
+        """
+        current = self._state_machine.current_state
+        if current in (PetState.IDLE, PetState.SLEEP, PetState.WALK, PetState.MOYU):
+            self._state_machine.transition_to(PetState.MOYU, force=True)
+            logger.info(f'触发摸鱼状态（从 {current.state_name}）')
+        else:
+            logger.debug(f'摸鱼状态未触发，当前状态 {current.state_name} 优先级更高')
+
+    def trigger_focus(self) -> None:
+        """触发专注状态：切换到 FOCUS 动画。"""
+        self._state_machine.transition_to(PetState.FOCUS, force=True)
+        logger.info('触发专注状态')
+
+    def stop_focus(self) -> None:
+        """专注结束，恢复待机。"""
+        if self._state_machine.current_state == PetState.FOCUS:
+            self._state_machine.transition_to(PetState.IDLE, force=True)
+            logger.info('专注状态结束，恢复待机')
+
+    def set_salary_manager(self, mgr) -> None:
+        """注入薪资管理器，供右键菜单显示发薪/下班倒计时。"""
+        self._context_menu.set_salary_manager(mgr)
+
+    def set_pomodoro_manager(self, mgr) -> None:
+        """注入番茄钟管理器，供右键菜单显示番茄钟状态。"""
+        self._context_menu.set_pomodoro_manager(mgr)
+
+    # ── 气泡系统 ──
+
+    def _maybe_show_bubble(self, state: PetState) -> None:
+        """状态切换时按概率触发气泡。
+
+        DRAGGING 状态不弹气泡（拖拽中不方便看）。
+        """
+        if state == PetState.DRAGGING:
+            return
+        if random.random() < self.BUBBLE_TRIGGER_PROBABILITY:
+            quote = get_random_quote(state.state_name)
+            self.bubble_requested.emit(quote)
+
+    def _emit_position(self) -> None:
+        """发出当前位置信号，供气泡跟随。"""
+        self.position_changed.emit(self.x(), self.y(), self.width())
 
     # ── 鼠标事件委托 ──
 

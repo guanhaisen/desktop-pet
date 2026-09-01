@@ -40,3 +40,6 @@ Desktop.ini
 
 # Config (runtime data, not source)
 config/*.json
+
+# Disabled asset backups (not tracked)
+assets/yuexinmiao/_archive/

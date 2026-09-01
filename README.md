@@ -344,18 +344,20 @@ desktop-pet/
 ├── requirements.txt                 # 依赖（仅 PyQt5）
 ├── .gitignore                       # Git 忽略规则
 ├── assets/
-│   ├── yuexinmiao/                  # 动画资源（GIF）
-│   │   ├── idle.gif                 # 待机
-│   │   ├── idle-happy.gif           # 心情：开心
-│   │   ├── idle-tired.gif           # 心情：疲惫
-│   │   ├── idle-emo.gif             # 心情：emo
-│   │   ├── walk.gif                 # 行走
-│   │   ├── interact.gif             # 互动
-│   │   ├── dragging.gif             # 拖拽
-│   │   ├── sleep.gif                # 睡眠
-│   │   ├── remind.gif               # 提醒
-│   │   ├── moyv.gif                 # 摸鱼
-│   │   └── zhuanzhu.gif             # 专注
+│   ├── yuexinmiao/                  # 动画资源（按状态分文件夹，可放多张随机轮播）
+│   │   ├── idle/                    # 待机（idle.gif 基准 + 候选随机）
+│   │   ├── idle-happy/              # 心情：开心
+│   │   ├── idle-tired/              # 心情：疲惫
+│   │   ├── idle-emo/                # 心情：emo
+│   │   ├── walk/                    # 行走
+│   │   ├── interact/                # 互动
+│   │   ├── dragging/                # 拖拽
+│   │   ├── sleep/                   # 睡眠
+│   │   ├── remind/                  # 提醒
+│   │   ├── moyv/                    # 摸鱼
+│   │   ├── zhuanzhu/                # 专注
+│   │   ├── _archive/                # 停用素材
+│   │   └── yuexinmiao.png           # 应用图标
 │   └── screenshots/                 # README 截图
 ├── config/                          # 运行时配置（自动生成，gitignore）
 │   ├── app_config.json              # 应用配置
@@ -365,7 +367,7 @@ desktop-pet/
     ├── app.py                       # 主控制器
     ├── pet_window.py                # 桌宠窗口（动画+交互+状态机+菜单）
     ├── animation/                   # 动画系统
-    │   ├── animation_controller.py  # 动画控制器（GIF 播放+心情变体）
+    │   ├── animation_controller.py  # 动画控制器（状态候选池随机+心情变体）
     │   ├── gif_player.py            # QMovie 播放器
     │   └── frame_player.py          # 帧序列播放器
     ├── state/                       # 状态机
@@ -470,17 +472,29 @@ PetApp._connect_signals() 统一分发
 
 ## 添加自定义动画
 
-1. 将 GIF 文件放入 `assets/yuexinmiao/` 目录
-2. 文件名需与 `PetState` 枚举的 `state_name` 对应
-3. 重启程序后自动加载
-
-当前支持的动画文件名：
+素材按状态分文件夹存放于 `assets/yuexinmiao/`，每个状态对应一个同名文件夹：
 
 ```
-idle.gif, idle-happy.gif, idle-tired.gif, idle-emo.gif
-walk.gif, interact.gif, dragging.gif, sleep.gif
-remind.gif, moyv.gif, zhuanzhu.gif
+assets/yuexinmiao/
+├── idle/           待机（idle.gif 为尺寸基准，可放多张随机）
+├── idle-happy/     心情：开心
+├── idle-tired/     心情：疲惫
+├── idle-emo/       心情：emo
+├── walk/           行走
+├── interact/       互动
+├── dragging/       拖拽
+├── sleep/          睡眠
+├── remind/         提醒
+├── moyv/           摸鱼
+└── zhuanzhu/       专注
 ```
+
+1. 将 GIF 放入对应状态文件夹（如 `assets/yuexinmiao/sleep/`）
+2. 一个状态文件夹内放多张 GIF，桌宠播放该状态时会**随机**轮播其中一张（如待机放多张 `idle-*.gif` 让待机不单调）
+3. 也支持在文件夹内放 PNG 帧序列（`*.png`）来播放逐帧动画
+4. 重启程序后自动加载；某状态资源缺失时自动降级到待机动画
+
+> 建议每个状态保留一张与文件夹名同名的文件（如 `sleep.gif`），作为尺寸基准与兜底。
 
 ---
 
@@ -525,7 +539,7 @@ remind.gif, moyv.gif, zhuanzhu.gif
 
 **Q：动画 GIF 放进去了但没有显示？**
 
-文件名需要与 `PetState` 枚举的 `state_name` 完全对应（如 `idle.gif`、`walk.gif`、`moyv.gif`）。如果对应状态的 GIF 缺失，会自动降级到 `idle.gif`。
+可能放错位置。按「添加自定义动画」一节将 GIF 放入对应状态的文件夹（如 `sleep/`、`moyv/`）。若该状态资源缺失，会自动降级到待机动画。
 
 **Q：重装或换电脑后数据会丢失吗？**
 

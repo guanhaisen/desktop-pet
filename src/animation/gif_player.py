@@ -19,7 +19,8 @@ class GifPlayer:
         self._movie: QMovie = None
         self._label: QLabel = None
         self._scale: float = 1.0
-        self._frame_size: QSize = QSize()  # 缓存的帧尺寸
+        self._frame_size: QSize = QSize()   # 缓存的原图帧尺寸
+        self._fixed_size: QSize = QSize()   # 强制显示尺寸（适配基准窗口大小）
         self._loop_finished_callback = None
         self._loop_mode = True
 
@@ -28,6 +29,12 @@ class GifPlayer:
 
     def set_scale(self, scale: float) -> None:
         self._scale = scale
+        if self._movie and self._label:
+            self._apply_scaled_size()
+
+    def set_fixed_size(self, size: QSize) -> None:
+        """强制固定显示尺寸（用于候选池素材与基准 GIF 尺寸不一致时对齐）。"""
+        self._fixed_size = size
         if self._movie and self._label:
             self._apply_scaled_size()
 
@@ -107,14 +114,17 @@ class GifPlayer:
         return QSize()
 
     def _apply_scaled_size(self) -> None:
-        """按缩放比例调整 GIF 显示尺寸。"""
+        """按缩放比例调整 GIF 显示尺寸。优先使用固定尺寸，否则按原图×缩放。"""
         if not self._movie:
             return
-        original = self._frame_size
-        if original.isEmpty():
-            original = self._movie.currentPixmap().size()
-        if original.isEmpty():
-            original = self._movie.frameRect().size()
+        if self._fixed_size and not self._fixed_size.isEmpty():
+            original = self._fixed_size
+        else:
+            original = self._frame_size
+            if original.isEmpty():
+                original = self._movie.currentPixmap().size()
+            if original.isEmpty():
+                original = self._movie.frameRect().size()
         if not original.isEmpty():
             scaled = QSize(
                 int(original.width() * self._scale),
